@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Shipping Management AMP — User Guide</title>
+<style>
+  body { font-family: "Segoe UI", system-ui, sans-serif; color: #121417; background: #eceef1; margin: 0; padding: 28px; line-height: 1.55; }
+  main { max-width: 860px; margin: 0 auto; background: #fff; border-radius: 22px; padding: 30px 38px; box-shadow: 0 8px 24px rgba(16,24,40,.06); }
+  h1 { font-weight: 500; letter-spacing: -.6px; margin: 0 0 4px; font-size: 30px; }
+  h2 { font-size: 17px; margin: 28px 0 8px; }
+  .sub { color: #7a8089; margin-bottom: 18px; }
+  ol li, ul li { margin: 4px 0; }
+  code, kbd { background: #f4f5f7; border-radius: 6px; padding: 1px 6px; font-size: 12.5px; }
+  .pill { display: inline-block; background: #111214; color: #fff; border-radius: 999px; padding: 1px 10px; font-size: 12.5px; }
+  .note { background: #efe8fd; color: #3b1a7a; border-radius: 14px; padding: 10px 14px; margin: 12px 0; }
+  .warn { background: #fff4e5; color: #7a2e0b; border-radius: 14px; padding: 10px 14px; margin: 12px 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+  td, th { text-align: left; padding: 6px 8px; border-bottom: 1px solid #e6e8ec; vertical-align: top; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Shipping Management AMP</h1>
+  <div class="sub">User guide · commercial invoices from proforma invoices</div>
+
+  <h2>Make a commercial invoice</h2>
+  <ol>
+    <li>Click <span class="pill">Commercial Invoice</span> (or <b>+</b> at the top right for a new one).</li>
+    <li><b>Step 1 — Proforma invoice:</b> type the PI number (e.g. <code>61001/M/S</code>) and press <kbd>Enter</kbd> or <b>Fetch details</b>.
+      The consignee, port of discharge and every item come in. Or click <b>Browse proformas</b> and pick one.</li>
+    <li><b>Step 2:</b> type the <b>commercial invoice no</b> (e.g. <code>M/26/021</code>) and check the date, consignee and ASN no.
+      If the number is already in the FoxPro table (made by the old program), click <b>Use FoxPro record</b>.</li>
+    <li><b>Step 3 — Shipment:</b> vessel, voyage, ETD, ETA, container no, container seal no, payment terms.</li>
+    <li><b>Goods &amp; order:</b> PO no, POD, incoterms — printed above the items.</li>
+    <li><b>Items shipped:</b> change quantities to what was actually shipped; the total is qty × price (a total you type over is kept and outlined).
+      Add barcodes once — they are filled in automatically on the next invoice for the same items.</li>
+    <li><b>Totals, marks &amp; reference</b>, <b>Certificate</b>, <b>Beneficiary &amp; bank</b>: type or change the text; leave "Say" blank for the automatic amount in words.</li>
+    <li><b>Preview</b> to check, then <b>Save</b>. <b>Save PDF</b> and <b>Print</b> are in the dark bar at the bottom.</li>
+  </ol>
+  <div class="note">When a value is longer than its FoxPro field, a note under the field shows what FoxPro will keep (e.g. payment terms <code>T/T 30 DAYS</code> → <code>T/T</code>). The full text is still printed and kept in the app.</div>
+
+  <h2>Find, reprint, delete</h2>
+  <ul>
+    <li><span class="pill">Shipments</span>: every invoice in the app. Double-click to open; the printer button prints; the bin deletes (tick "also mark the FoxPro record deleted" if needed — it can be recalled).</li>
+    <li><span class="pill">Proforma Invoices</span>: the proformas in the Product Management App → <b>Make commercial invoice</b>.</li>
+    <li><span class="pill">FoxPro Records</span>: every record in the old shipping table. Click one to see every field, edit it, delete or recall it, or <b>Open as invoice</b>.</li>
+    <li><span class="pill">Change Log</span>: what was saved or deleted, when, and the old and new FoxPro values.</li>
+  </ul>
+
+  <h2>Messages</h2>
+  <table>
+    <tr><th>Message</th><th>What to do</th></tr>
+    <tr><td>No proforma invoice … in the Product Management App</td><td>Check the number, or use Browse proformas. Is the product manager's PC on and the folder shared?</td></tr>
+    <tr><td>… is already in the FoxPro table</td><td>Click <b>Use FoxPro record</b> next to the invoice no, then save.</td></tr>
+    <tr><td>Saved in the app, but NOT in FoxPro: …</td><td>The invoice is safe in the app. Read the reason (often: FoxPro has the table open). Close it in FoxPro and save again.</td></tr>
+    <tr><td>An index file does not match the table</td><td>Ask the admin: Settings → <b>Rebuild ticked indexes</b> (with FoxPro closed).</td></tr>
+  </table>
+
+  <div class="warn">Do not keep the shipping table open for <b>writing</b> in FoxPro while this app saves. The app copies the table and its index before its first write each day.</div>
+
+  <h2>For the admin</h2>
+  <ul>
+    <li>First logins: <code>ampshipping</code> / <code>Ship@2026</code>; Settings password <code>Admin@2026</code>. Change them in Settings → Logins.</li>
+    <li>Settings → FoxPro shipping table: choose <code>deldem shipping.DBF</code>; <code>SHIPPING.IDX</code> next to it is ticked automatically. Switch on <b>Save to the FoxPro shipping table</b> when ready.</li>
+    <li>Settings → Product Management App database: on the product manager's PC share <code>%APPDATA%\Photo Quotation Generator\quotations</code>, then choose <code>\\PC-NAME\quotations\quotations.db</code> here.</li>
+    <li>Settings → Backup: choose a folder on another drive and click <b>Back up now</b> regularly.</li>
+  </ul>
+  <p style="color:#7a8089;font-size:12px;margin-top:28px">AMP Ceylon (Pvt) Ltd · Developed by P.Deepatharshan</p>
+</main>
+</body>
+</html>
