@@ -1,0 +1,77 @@
+{
+  "name": "shipping-management-amp",
+  "productName": "Shipping Management AMP",
+  "version": "1.0.0",
+  "description": "AMP Ceylon shipping management: commercial invoices from proforma invoices, kept in its own database and in the FoxPro shipping table",
+  "author": "AMP Ceylon (Pvt) Ltd",
+  "private": true,
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "start": "electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "test": "cross-env ELECTRON_RUN_AS_NODE=1 electron node_modules/vitest/vitest.mjs run",
+    "test:node": "vitest run",
+    "dist": "electron-vite build && electron-builder --win nsis --x64"
+  },
+  "devDependencies": {
+    "@fontsource-variable/inter": "^5.3.0",
+    "@types/node": "^22.20.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^5.2.0",
+    "cross-env": "^10.1.0",
+    "electron": "^44.7.0",
+    "electron-builder": "^26.15.3",
+    "electron-vite": "^5.0.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "typescript": "5.9",
+    "vite": "^7.3.7",
+    "vitest": "^5.0.3"
+  },
+  "build": {
+    "appId": "lk.ampceylon.shippingmanagement",
+    "productName": "Shipping Management AMP",
+    "copyright": "AMP Ceylon (Pvt) Ltd. Developed by P.Deepatharshan",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "out/**",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "docs/guide",
+        "to": "guide"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": true
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Shipping Management AMP",
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "Shipping-Management-AMP-Setup-${version}.exe"
+    },
+    "npmRebuild": false
+  }
+}

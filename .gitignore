@@ -1,0 +1,22 @@
+node_modules/
+out/
+dist/
+*.log
+.vite/
+
+# Never commit real company data. Real copies go in real-data/ (ignored).
+real-data/
+*.dbf
+*.DBF
+*.fpt
+*.FPT
+*.cdx
+*.CDX
+*.idx
+*.IDX
+*.pqg-lock
+!tests/fixtures/**
+
+# app
+*.shp-lock
+*.shp-new
