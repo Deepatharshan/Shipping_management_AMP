@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react'
 import type { InvoiceSummary } from '@shared/types'
 import type { OpenRequest, Screen } from '../App'
 import { Icon } from '../icons'
-import { errorText, fmtDate, fmtMoney, SearchBox, useToast } from '../ui'
+import { errorText, fmtDate, fmtMoney, SearchBox, useAdmin, useToast } from '../ui'
 import { DeleteInvoice } from './InvoiceEditor'
 
 export default function Shipments({ go }: { go: (s: Screen, r?: OpenRequest) => void }) {
   const toast = useToast()
+  const ensureAdmin = useAdmin()
   const [q, setQ] = useState('')
   const [rows, setRows] = useState<InvoiceSummary[]>([])
   const [del, setDel] = useState<InvoiceSummary | null>(null)
@@ -96,7 +97,10 @@ export default function Shipments({ go }: { go: (s: Screen, r?: OpenRequest) => 
                         <Icon name="download" />
                       </button>
                     )}
-                    <button className="roundbtn danger" title="Delete" onClick={() => setDel(r)}>
+                    <button className="roundbtn" title="Packing / weight list" onClick={() => go('packing', { kind: 'packingFromInvoice', invoiceId: r.id })}>
+                      <Icon name="box" />
+                    </button>
+                    <button className="roundbtn danger" title="Delete (admin)" onClick={async () => (await ensureAdmin(`delete the invoice ${r.invoiceNo}`)) && setDel(r)}>
                       <Icon name="trash" />
                     </button>
                   </td>

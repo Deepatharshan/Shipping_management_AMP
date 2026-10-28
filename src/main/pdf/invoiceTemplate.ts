@@ -8,7 +8,7 @@
  * does the page breaks after layout and sets window.__paginated when done (see render.ts).
  */
 import {
-  amountInWords, dmy, invoiceTotals, longDate, moneyGrouped, num, splitColour, unitWord,
+  amountInWords, dmy, invoiceSums, invoiceTotals, longDate, moneyGrouped, num, splitColour, unitWord,
   type CommercialInvoice
 } from '@shared/invoice'
 import type { CompanyDetails } from '@shared/types'
@@ -25,7 +25,8 @@ const amount = (t: string) => (t.trim() ? num(t).toFixed(2) : '')
 
 export function invoiceHtml(company: CompanyDetails, ci: CommercialInvoice): string {
   const t = invoiceTotals(ci.lines)
-  const words = ci.amountWords.trim() || amountInWords(t.amount, ci.currency)
+  const sums = invoiceSums(ci)
+  const words = ci.amountWords.trim() || amountInWords(sums.total, ci.currency)
 
   const header = (first: boolean) => `
     <div class="pgno">Page : <span class="n"></span></div>
@@ -64,7 +65,7 @@ export function invoiceHtml(company: CompanyDetails, ci: CommercialInvoice): str
       <div class="goods">${esc(ci.goodsTitle)}</div>
       <table class="pit">
         <tr><th>PI NO</th><th>PO NO</th><th>POD</th><th>TYPE</th><th>CURRENCY</th><th>AMOUNT</th></tr>
-        <tr><td>${esc(ci.piLabel || ci.piNo)}</td><td>${esc(ci.poNo)}</td><td>${esc(ci.pod)}</td><td>${esc(ci.type)}</td><td>${esc(ci.currency)}</td><td>${esc(moneyGrouped(t.amount))}</td></tr>
+        <tr><td>${esc(ci.piLabel || ci.piNo)}</td><td>${esc(ci.poNo)}</td><td>${esc(ci.pod)}</td><td>${esc(ci.type)}</td><td>${esc(ci.currency)}</td><td>${esc(moneyGrouped(sums.total))}</td></tr>
       </table>
       ${ci.incoterms.trim() ? `<div class="b">${esc(ci.incoterms)}</div>` : ''}
       ${ci.terms.trim() ? `<div class="b">${esc(ci.terms)}</div>` : ''}
@@ -91,8 +92,13 @@ export function invoiceHtml(company: CompanyDetails, ci: CommercialInvoice): str
   const totalsBlock = `
     <div class="blk totals">
       <div class="g trow"><div class="tl">TOTALS :</div><div></div><div></div><div></div>
-        <div class="num">${t.ctns || ''}</div><div class="num">${qtyTotal}</div><div class="num cur">US$</div><div class="num gt">${esc(t.amount.toFixed(2))}</div></div>
+        <div class="num">${t.ctns || ''}</div><div class="num">${qtyTotal}</div><div class="num cur">US$</div><div class="num ${sums.hasDiscount ? 'st' : 'gt'}">${esc(sums.subtotal.toFixed(2))}</div></div>
       <div class="g"><div></div><div></div><div></div><div></div><div class="num">Cartons</div><div></div><div></div><div></div></div>
+      ${sums.hasDiscount ? `
+      <div class="g drow"><div></div><div></div><div></div><div class="dl">${esc(ci.discountLabel.trim() || 'LESS : DISCOUNT')}${sums.percentText ? ` (${esc(sums.percentText)})` : ''}</div>
+        <div></div><div></div><div class="num cur">US$</div><div class="num">(${esc(sums.discount.toFixed(2))})</div></div>
+      <div class="g trow nrow"><div class="tl">NET TOTAL :</div><div></div><div></div><div></div>
+        <div></div><div></div><div class="num cur">US$</div><div class="num gt">${esc(sums.total.toFixed(2))}</div></div>` : ''}
       <div class="tlabel">${esc(ci.totalsLabel)}</div>
       <div class="say"><b>Say :</b> ${esc(words)}</div>
     </div>`
@@ -169,6 +175,10 @@ export function invoiceHtml(company: CompanyDetails, ci: CommercialInvoice): str
   .totals { margin-top: 1mm; border-top: .3mm solid #000; padding-top: 1.5mm; font-size: 8.6pt; }
   .totals .trow { font-weight: bold; }
   .totals .gt { border-bottom: .6mm double #000; }
+  .totals .st { border-bottom: .3mm solid #000; }
+  .totals .drow { margin-top: 1.5mm; font-weight: bold; }
+  .totals .drow .dl { text-align: right; padding-right: 2mm; }
+  .totals .nrow { margin-top: 1.5mm; }
   .totals .cur { text-align: right; }
   .tlabel { text-align: right; font-weight: bold; margin-top: 2mm; }
   .say { margin-top: 4mm; font-size: 9.2pt; font-weight: bold; }

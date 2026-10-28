@@ -152,3 +152,112 @@ export function SearchBox({ value, onChange, placeholder, autoFocus }: { value: 
     </div>
   )
 }
+
+/**
+ * Asks for the admin password when an action needs it (changing or deleting something already saved).
+ * `ensureAdmin(what)` resolves true at once when the admin is already unlocked, else after the password.
+ */
+const AdminCtx = createContext<(what: string) => Promise<boolean>>(async () => false)
+export const useAdmin = () => useContext(AdminCtx)
+
+export function AdminProvider({ children, onUnlocked }: { children: ReactNode; onUnlocked: () => void }) {
+  const [ask, setAsk] = useState<{ what: string; resolve: (ok: boolean) => void } | null>(null)
+  const ensure = useCallback(async (what: string) => {
+    const s = await window.api.session()
+    if (s.admin) return true
+    return new Promise<boolean>((resolve) => setAsk({ what, resolve }))
+  }, [])
+  const close = (ok: boolean) => {
+    ask?.resolve(ok)
+    setAsk(null)
+    if (ok) onUnlocked()
+  }
+  return (
+    <AdminCtx.Provider value={ensure}>
+      {children}
+      {ask && <AdminPasswordDialog what={ask.what} onDone={close} />}
+    </AdminCtx.Provider>
+  )
+}
+
+function AdminPasswordDialog({ what, onDone }: { what: string; onDone: (ok: boolean) => void }) {
+  const [pw, setPw] = useState('')
+  const [msg, setMsg] = useState('')
+  const [busy, setBusy] = useState(false)
+  const submit = async () => {
+    if (!pw || busy) return
+    setBusy(true)
+    const r = await window.api.adminLogin(pw)
+    setBusy(false)
+    if (r.ok) onDone(true)
+    else {
+      setMsg(r.message)
+      setPw('')
+    }
+  }
+  return (
+    <Dialog
+      title="Admin password needed"
+      onClose={() => onDone(false)}
+      footer={
+        <>
+          <button className="btn" onClick={() => onDone(false)}>
+            Cancel
+          </button>
+          <button className="btn dark" disabled={!pw || busy} onClick={submit}>
+            <Icon name="unlock" /> Unlock
+          </button>
+        </>
+      }
+    >
+      <p>Only the admin can {what}. Admin stays unlocked until you lock it or log out.</p>
+      <label className="f">
+        Admin password
+        <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submit()} autoFocus />
+      </label>
+      {msg && <p className="error mt">{msg}</p>}
+    </Dialog>
+  )
+}
+
+/** A whole screen that only the admin may open. */
+export function AdminGate({ title, sub, button, onOpen }: { title: string; sub: string; button: string; onOpen: () => void }) {
+  const [pw, setPw] = useState('')
+  const [msg, setMsg] = useState('')
+  return (
+    <>
+      <div className="pagehead">
+        <div>
+          <h1>{title}</h1>
+          <div className="sub">{sub}</div>
+        </div>
+      </div>
+      <form
+        className="card"
+        style={{ maxWidth: 440 }}
+        onSubmit={async (e) => {
+          e.preventDefault()
+          const r = await window.api.adminLogin(pw)
+          if (r.ok) onOpen()
+          else {
+            setMsg(r.message)
+            setPw('')
+          }
+        }}
+      >
+        <div className="cardhead">
+          <Icon name="lock" />
+          <h2>Admin password</h2>
+        </div>
+        <label className="f">
+          Password
+          <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} autoFocus />
+        </label>
+        {msg && <p className="error mt">{msg}</p>}
+        <button className="btn dark mt" disabled={!pw}>
+          {button}
+        </button>
+      </form>
+    </>
+  )
+}

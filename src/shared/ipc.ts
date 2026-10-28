@@ -2,8 +2,10 @@
 import type { CommercialInvoice } from './invoice'
 import type { FieldInfo, FoxValue } from './foxMap'
 import type { PmaProforma, ProformaSummary } from './proforma'
+import type { PackingList, PackingSummary } from './packing'
+import type { RecordRow, RecordSummary, ShippingRecord } from './shippingRecord'
 import type {
-  AppInfo, ChangeEntry, FoxPage, FoxRecord, FoxRow, FoxStatus, InvoiceSummary, LoginResult, PmaStatus, SaveResult, Session, Settings, Stats
+  AppInfo, ChangeEntry, SalePoint, FoxPage, FoxRecord, FoxRow, FoxStatus, InvoiceSummary, LoginResult, PmaStatus, SaveResult, Session, Settings, Stats
 } from './types'
 
 export interface Api {
@@ -50,7 +52,31 @@ export interface Api {
   invoicePrint(ci: CommercialInvoice): Promise<void>
   openPath(path: string): Promise<void>
 
+  packingList(query: string): Promise<PackingSummary[]>
+  packingGet(id: string): Promise<PackingList | null>
+  /** a new list for anyone; changing a saved one needs the admin password */
+  packingSave(pl: PackingList): Promise<PackingList>
+  packingDelete(id: string): Promise<string>
+  packingPreview(pl: PackingList): Promise<{ pdf: string; pages: number }>
+  packingSavePdf(pl: PackingList): Promise<string | null>
+  packingPrint(pl: PackingList): Promise<void>
+
+  recordList(): Promise<RecordSummary[]>
+  recordGet(id: string): Promise<ShippingRecord | null>
+  /** the saved record of a month (YYYY-MM), if any */
+  recordForMonth(month: string): Promise<ShippingRecord | null>
+  /** a new record for anyone; changing a saved one needs the admin password */
+  recordSave(r: ShippingRecord): Promise<ShippingRecord>
+  recordDelete(id: string): Promise<string>
+  /** a row filled from the commercial invoice with this number (app first, then FoxPro); null when not found */
+  recordRowFor(invoiceNo: string): Promise<RecordRow | null>
+  recordPreview(r: ShippingRecord): Promise<{ pdf: string; pages: number }>
+  recordSavePdf(r: ShippingRecord): Promise<string | null>
+  recordPrint(r: ShippingRecord): Promise<void>
+
   stats(): Promise<Stats>
+  /** every invoice date + amount: the FoxPro table plus app invoices not yet in it */
+  salesSeries(): Promise<SalePoint[]>
   changes(): Promise<ChangeEntry[]>
   backupNow(): Promise<string>
   openGuide(): Promise<void>
@@ -62,10 +88,15 @@ export const API_METHODS: (keyof Api)[] = [
   'foxStatus', 'foxList', 'foxFind', 'foxRecord', 'foxRecordValues', 'foxFieldInfo', 'foxUpdateFields', 'foxSetDeleted', 'foxOpenAsInvoice', 'foxRebuildIndexes',
   'pmaStatus', 'pmaList', 'pmaFind', 'pmaGet',
   'invoiceList', 'knownBarcodes', 'invoiceGet', 'invoiceSave', 'invoiceDelete', 'invoicePreview', 'invoiceSavePdf', 'invoicePrint', 'openPath',
-  'stats', 'changes', 'backupNow', 'openGuide'
+  'packingList', 'packingGet', 'packingSave', 'packingDelete', 'packingPreview', 'packingSavePdf', 'packingPrint',
+  'recordList', 'recordGet', 'recordForMonth', 'recordSave', 'recordDelete', 'recordRowFor', 'recordPreview', 'recordSavePdf', 'recordPrint',
+  'stats', 'salesSeries', 'changes', 'backupNow', 'openGuide'
 ]
 
 /** Calls that work before login. */
 export const PUBLIC_METHODS = new Set<keyof Api>(['appInfo', 'session', 'login'])
-/** Calls that need the admin password. */
-export const ADMIN_METHODS = new Set<keyof Api>(['saveSettings', 'changeLogins', 'foxRebuildIndexes', 'backupNow'])
+/**
+ * Calls that need the admin password. Saving over an invoice or packing list that is already saved
+ * also needs it (checked in the handler, since saving a new one does not).
+ */
+export const ADMIN_METHODS = new Set<keyof Api>(['saveSettings', 'changeLogins', 'foxRebuildIndexes', 'backupNow', 'invoiceDelete', 'packingDelete', 'recordDelete', 'changes'])

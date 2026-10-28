@@ -9,6 +9,8 @@
  */
 
 export type CiUnit = 'PCS' | 'DOZ' | 'SETS'
+export type DiscountType = 'percent' | 'amount'
+export const DEFAULT_DISCOUNT_LABEL = 'LESS : DISCOUNT'
 export const CI_UNITS: CiUnit[] = ['PCS', 'DOZ', 'SETS']
 
 export interface CiLine {
@@ -90,6 +92,14 @@ export interface CommercialInvoice {
   incoterms: string // INCOTERMS 2010
   terms: string // TERMS FOB COLOMBO, SRI LANKA
   lines: CiLine[]
+  /**
+   * Discount on the whole invoice, given by the shipping manager. Blank or 0 = no discount, and
+   * nothing about a discount is printed. `discountType` says whether `discount` is a % or US$.
+   */
+  discount: string
+  discountType: DiscountType
+  /** printed before the discount amount, e.g. LESS : DISCOUNT */
+  discountLabel: string
   // last page
   totalsLabel: string // FOB COLOMBO, SRI LANKA
   amountWords: string // typed over the automatic text when not blank
@@ -203,6 +213,9 @@ export function newInvoice(d: CiDefaults = DEFAULT_CI, date = todayIso()): Comme
     incoterms: d.incoterms,
     terms: d.terms,
     lines: [],
+    discount: '',
+    discountType: 'percent',
+    discountLabel: DEFAULT_DISCOUNT_LABEL,
     totalsLabel: d.totalsLabel,
     amountWords: '',
     shippingMarks: '',
@@ -269,6 +282,29 @@ export function invoiceTotals(lines: CiLine[]): CiTotals {
     byUnit: CI_UNITS.filter((u) => by.has(u)).map((u) => ({ unit: u, qty: by.get(u)! })),
     amount: Math.round(amount * 100) / 100
   }
+}
+
+export interface InvoiceSums {
+  /** total of the item lines */
+  subtotal: number
+  /** discount in money (0 when none) */
+  discount: number
+  /** what the customer pays: subtotal − discount */
+  total: number
+  hasDiscount: boolean
+  /** "5%" for a percentage discount, '' for a fixed amount */
+  percentText: string
+}
+
+/** Subtotal, discount and the total to pay. A discount is never more than the subtotal or below zero. */
+export function invoiceSums(ci: Pick<CommercialInvoice, 'lines' | 'discount' | 'discountType'>): InvoiceSums {
+  const subtotal = invoiceTotals(ci.lines).amount
+  const v = num(ci.discount ?? '')
+  const pct = ci.discountType === 'percent'
+  let discount = v > 0 ? (pct ? Math.round(subtotal * Math.min(v, 100)) / 100 : v) : 0
+  discount = Math.round(Math.min(discount, subtotal) * 100) / 100
+  const percentText = pct && discount > 0 ? `${String(Math.round(Math.min(v, 100) * 100) / 100)}%` : ''
+  return { subtotal, discount, total: Math.round((subtotal - discount) * 100) / 100, hasDiscount: discount > 0, percentText }
 }
 
 /** "pcs" / "pc" as printed after the quantity and the price. */

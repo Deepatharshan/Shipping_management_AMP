@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import type { InvoiceSummary, Stats } from '@shared/types'
 import type { CommercialInvoice } from '@shared/invoice'
-import { invoiceTotals, todayIso } from '@shared/invoice'
+import { invoiceSums, invoiceTotals, todayIso } from '@shared/invoice'
 import type { OpenRequest, Screen } from '../App'
 import { Icon } from '../icons'
 import { MiniContainer } from '../Truck'
 import { TrailerCalendar } from '../TrailerCalendar'
+import { SalesChart } from '../SalesChart'
 import { errorText, fmtDate, fmtMoney, useToast } from '../ui'
 
 export default function Dashboard({ go }: { go: (s: Screen, r?: OpenRequest) => void }) {
@@ -48,90 +49,54 @@ export default function Dashboard({ go }: { go: (s: Screen, r?: OpenRequest) => 
         </div>
       </div>
 
-      <div className="hero">
-        <div className="card stage">
-          <div className="kpis">
-            <div className="kpi">
-              <div className="label">Invoices in {monthLabel}</div>
-              <div className="value">
-                {stats?.thisMonth ?? '–'} <span className="badge lime">{stats ? `${stats.invoices} total` : ''}</span>
-              </div>
+      {/* 1. key numbers */}
+      <div className="card kpicard">
+        <div className="kpis">
+          <div className="kpi">
+            <div className="label">Invoices in {monthLabel}</div>
+            <div className="value">{stats?.thisMonth ?? '–'}</div>
+            <div className="foot">{stats ? `${stats.invoices.toLocaleString('en-US')} in total` : '\u00a0'}</div>
+          </div>
+          <div className="kpi">
+            <div className="label">Value in {monthLabel}</div>
+            <div className="value">
+              <span className="cur">US$</span>
+              {stats ? fmtMoney(stats.amountThisMonth) : '–'}
             </div>
-            <div className="kpi">
-              <div className="label">Value in {monthLabel} (US$)</div>
-              <div className="value">{stats ? fmtMoney(stats.amountThisMonth) : '–'}</div>
-            </div>
-            <div className="kpi">
-              <div className="label">FoxPro records</div>
-              <div className="value">
-                {stats ? stats.foxRecords.toLocaleString('en-US') : '–'} <span className="badge soft">{stats ? `${stats.inFoxPro} linked` : ''}</span>
-              </div>
-            </div>
-            <div className="kpi">
-              <div className="label">Proformas available</div>
-              <div className="value">{stats ? stats.proformas.toLocaleString('en-US') : '–'}</div>
+            <div className="foot">{stats ? `US$ ${fmtMoney(stats.amountTotal)} in total` : '\u00a0'}</div>
+          </div>
+          <div className="kpi">
+            <div className="label">FoxPro records</div>
+            <div className="value">{stats ? stats.foxRecords.toLocaleString('en-US') : '–'}</div>
+            <div className="foot">{stats ? `${stats.inFoxPro.toLocaleString('en-US')} linked to the app` : '\u00a0'}</div>
+          </div>
+          <div className="kpi">
+            <div className="label">Proformas available</div>
+            <div className="value">{stats ? stats.proformas.toLocaleString('en-US') : '–'}</div>
+            <div className="foot" title="in the Product Management App">
+              in the Product Management App
             </div>
           </div>
-          {selInv && (
-            <div className="row wrap" style={{ marginTop: 28, gap: 18, fontSize: 12.5 }}>
-              <span className="muted">Selected</span>
-              <b>{selInv.invoiceNo}</b>
-              <span>{selInv.vessel || 'no vessel yet'}</span>
-              <span className="muted">Container</span> <span>{selInv.containerNo || '–'}</span>
-              <span className="muted">Cartons</span> <b>{t?.ctns ?? 0}</b>
-              <span className="muted">Amount</span> <b>US$ {fmtMoney(t?.amount ?? 0)}</b>
-            </div>
-          )}
-          {!recent.length && (
-            <div className="notice mt">
-              <Icon name="box" />
-              <span className="grow">No commercial invoices yet. Start one from a proforma invoice: type its number and the items, customer and port fill in.</span>
-            </div>
-          )}
-          <TrailerCalendar rows={stats?.upcoming ?? []} onOpen={(id) => window.api.invoiceGet(id).then((ci) => ci && go('invoice', { kind: 'invoice', invoice: ci }))} />
         </div>
+        {!recent.length && (
+          <div className="notice mt">
+            <Icon name="box" />
+            <span className="grow">No commercial invoices yet. Start one from a proforma invoice: type its number and the items, customer and port fill in.</span>
+          </div>
+        )}
+      </div>
 
-        <div className="card floating">
-          <div className="cardhead">
-            <div>
-              <div className="eyebrow">{selInv?.piNo ? `PI ${selInv.piNo}` : 'Container load'}</div>
-              <h2>Load Planning</h2>
-            </div>
-            <div className="right">
-              <button className="roundbtn" title="Open in the editor" disabled={!selInv} onClick={() => selInv && go('invoice', { kind: 'invoice', invoice: selInv })}>
-                <Icon name="edit" />
-              </button>
-            </div>
-          </div>
-          <div className="row wrap" style={{ marginBottom: 10 }}>
-            <button className="chipbtn" disabled={!selInv} onClick={() => selInv && window.api.invoicePrint(selInv).catch((e) => toast(errorText(e), 'error'))}>
-              <Icon name="printer" size={13} /> Print
-            </button>
-            <button className="chipbtn" onClick={() => go('invoice', { kind: 'new' })}>
-              <Icon name="plus" size={13} /> Create New Invoice
-            </button>
-          </div>
-          <div className="list" style={{ maxHeight: 300, overflow: 'auto' }}>
-            {(selInv?.lines ?? []).map((l, i) => (
-              <div key={l.id} className="row">
-                <div className="ic">
-                  <Icon name="box" />
-                </div>
-                <span style={{ width: 22 }} className="muted">
-                  {String(i + 1).padStart(2, '0')}
-                </span>
-                <span className="grow">
-                  <b>{l.ourItem || '—'}</b> <span className="muted">{l.colour}</span>
-                </span>
-                <span className="badge">{l.ctns || '–'} ctns</span>
-              </div>
-            ))}
-            {selInv && !selInv.lines.length && <div className="empty">No items on this invoice yet.</div>}
-            {!selInv && <div className="empty">Select a shipment below.</div>}
-          </div>
+      {/* 2. sales and the shipping calendar */}
+      <div className="dgrid">
+        <div className="card">
+          <SalesChart />
+        </div>
+        <div className="card calcard">
+          <TrailerCalendar compact rows={stats?.upcoming ?? []} onOpen={(id) => window.api.invoiceGet(id).then((ci) => ci && go('invoice', { kind: 'invoice', invoice: ci }))} />
         </div>
       </div>
 
+      {/* 3. recent shipments */}
       <div className="shipcards">
         {recent.slice(0, 5).map((r) => (
           <div key={r.id} className={sel === r.id ? 'shipcard sel' : 'shipcard'} onClick={() => setSel(r.id)} onDoubleClick={() => window.api.invoiceGet(r.id).then((ci) => ci && go('invoice', { kind: 'invoice', invoice: ci }))}>
@@ -153,7 +118,77 @@ export default function Dashboard({ go }: { go: (s: Screen, r?: OpenRequest) => 
         ))}
       </div>
 
-      <Schedule rows={stats?.upcoming ?? []} onOpen={(id) => window.api.invoiceGet(id).then((ci) => ci && go('invoice', { kind: 'invoice', invoice: ci }))} />
+      {/* 4. sailing schedule and the selected shipment's load */}
+      <div className="dgrid">
+        <Schedule rows={stats?.upcoming ?? []} onOpen={(id) => window.api.invoiceGet(id).then((ci) => ci && go('invoice', { kind: 'invoice', invoice: ci }))} />
+        <div className="card floating">
+          <div className="cardhead">
+            <div>
+              <div className="eyebrow">{selInv?.piNo ? `PI ${selInv.piNo}` : 'Container load'}</div>
+              <h2>Load Planning</h2>
+            </div>
+            <div className="right">
+              <button className="roundbtn" title="Print" disabled={!selInv} onClick={() => selInv && window.api.invoicePrint(selInv).catch((e) => toast(errorText(e), 'error'))}>
+                <Icon name="printer" />
+              </button>
+              <button className="roundbtn" title="Open in the editor" disabled={!selInv} onClick={() => selInv && go('invoice', { kind: 'invoice', invoice: selInv })}>
+                <Icon name="edit" />
+              </button>
+            </div>
+          </div>
+          {selInv && (
+            <div className="loadsum">
+              <div>
+                <span>Invoice</span>
+                <b>{selInv.invoiceNo}</b>
+              </div>
+              <div>
+                <span>Cartons</span>
+                <b>{t?.ctns ?? 0}</b>
+              </div>
+              <div>
+                <span>Amount US$</span>
+                <b>{fmtMoney(invoiceSums(selInv).total)}</b>
+              </div>
+              <div className="wide">
+                <span>Vessel · container</span>
+                <b>
+                  {selInv.vessel || 'no vessel yet'} · {selInv.containerNo || '–'}
+                </b>
+              </div>
+            </div>
+          )}
+          <div className="list loadlist">
+            {(selInv?.lines ?? []).map((l, i) => (
+              <div key={l.id} className="row">
+                <div className="ic">
+                  <Icon name="box" />
+                </div>
+                <span style={{ width: 22 }} className="muted">
+                  {String(i + 1).padStart(2, '0')}
+                </span>
+                <span className="grow">
+                  <b>{l.ourItem || '—'}</b> <span className="muted">{l.colour}</span>
+                </span>
+                <span className="badge">{l.ctns || '–'} ctns</span>
+              </div>
+            ))}
+            {selInv && !selInv.lines.length && <div className="empty">No items on this invoice yet.</div>}
+            {!selInv && (
+              <div className="emptystate">
+                <div className="ico">
+                  <Icon name="box" size={20} />
+                </div>
+                <b>No shipment selected</b>
+                <span>Pick an invoice card above to see what is in its container, or start a new one.</span>
+                <button className="btn small dark" onClick={() => go('invoice', { kind: 'new' })}>
+                  <Icon name="plus" /> New commercial invoice
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
     </>
   )
 }

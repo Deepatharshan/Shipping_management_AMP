@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  amountInWords, blankLine, CI_UNITS, computeCtns, DEFAULT_CI, invoiceTotals, lineTotal, newInvoice, normalizeInvoice,
+  amountInWords, blankLine, CI_UNITS, computeCtns, DEFAULT_CI, DEFAULT_DISCOUNT_LABEL, invoiceSums, invoiceTotals, lineTotal, newInvoice, normalizeInvoice,
   type CiDefaults, type CiLine, type CommercialInvoice, type FoxExtra
 } from '@shared/invoice'
 import { invoiceFromProforma, type ProformaSummary } from '@shared/proforma'
@@ -8,7 +8,7 @@ import { FOX_EXTRA_FIELDS, FOX_MAIN_FIELDS, linkToFox, type FieldInfo } from '@s
 import type { FoxRow, Settings } from '@shared/types'
 import type { OpenRequest, Screen } from '../App'
 import { Icon } from '../icons'
-import { ConfirmDialog, Drawer, errorText, fmtDate, fmtMoney, SearchBox, useToast } from '../ui'
+import { ConfirmDialog, Drawer, errorText, fmtDate, fmtMoney, SearchBox, useAdmin, useToast } from '../ui'
 
 const DRAFT_KEY = 'shp.draft.v1'
 
@@ -26,6 +26,7 @@ type FoxMainKey = keyof typeof FOX_MAIN_FIELDS
 
 export default function InvoiceEditor({ request, onHandled, go }: { request: OpenRequest; onHandled: () => void; go: (s: Screen, r?: OpenRequest) => void }) {
   const toast = useToast()
+  const ensureAdmin = useAdmin()
   const [settings, setSettings] = useState<Settings | null>(null)
   const [ci, setCi] = useState<CommercialInvoice | null>(null)
   const [dirty, setDirty] = useState(false)
@@ -149,6 +150,10 @@ export default function InvoiceEditor({ request, onHandled, go }: { request: Ope
     })
 
   const totals = useMemo(() => invoiceTotals(ci?.lines ?? []), [ci?.lines])
+  const sums = useMemo(
+    () => invoiceSums({ lines: ci?.lines ?? [], discount: ci?.discount ?? '', discountType: ci?.discountType ?? 'percent' }),
+    [ci?.lines, ci?.discount, ci?.discountType]
+  )
 
   /** A note when a value is longer than its FoxPro field. */
   const width = (field: string, value: string) => {
@@ -192,6 +197,7 @@ export default function InvoiceEditor({ request, onHandled, go }: { request: Ope
   const save = async () => {
     if (!ci) return
     if (!ci.invoiceNo.trim()) return toast('Type the commercial invoice no first.', 'warn')
+    if (ci.id && !(await ensureAdmin(`save changes to the saved invoice ${ci.invoiceNo}`))) return
     setBusy('Saving…')
     try {
       const r = await window.api.invoiceSave(ci, toFox)
@@ -255,7 +261,7 @@ export default function InvoiceEditor({ request, onHandled, go }: { request: Ope
   if (!ci || !settings) return <div className="empty">Loading…</div>
 
   const m = (k: FoxMainKey) => ci[k] as string
-  const autoWords = amountInWords(totals.amount, ci.currency)
+  const autoWords = amountInWords(sums.total, ci.currency)
   const writeOn = settings.writeFoxPro
 
   return (
@@ -289,7 +295,15 @@ export default function InvoiceEditor({ request, onHandled, go }: { request: Ope
           >
             <Icon name="copy" /> Duplicate
           </button>
-          <button className="btn danger" disabled={!ci.id} onClick={() => setConfirm({ kind: 'delete' })}>
+          <button
+            className="btn"
+            disabled={!ci.id || dirty}
+            title={ci.id ? (dirty ? 'Save the invoice first' : 'Make the packing / weight list for this invoice') : 'Save the invoice first'}
+            onClick={() => ci.id && go('packing', { kind: 'packingFromInvoice', invoiceId: ci.id })}
+          >
+            <Icon name="box" /> Packing list
+          </button>
+          <button className="btn danger" disabled={!ci.id} onClick={async () => (await ensureAdmin(`delete the invoice ${ci.invoiceNo}`)) && setConfirm({ kind: 'delete' })}>
             <Icon name="trash" /> Delete
           </button>
         </div>
@@ -320,7 +334,7 @@ export default function InvoiceEditor({ request, onHandled, go }: { request: Ope
               <div className="picard">
                 <Icon name="link" />
                 <span>
-                  From PI <b>{ci.piNo}</b> · {ci.lines.length} items · US$ {fmtMoney(totals.amount)}
+                  From PI <b>{ci.piNo}</b> · {ci.lines.length} items · US$ {fmtMoney(sums.total)}
                 </span>
               </div>
             )}
@@ -611,9 +625,50 @@ export default function InvoiceEditor({ request, onHandled, go }: { request: Ope
                 <b>{u.qty.toLocaleString('en-US')}</b>
               </div>
             ))}
+            <div className={sums.hasDiscount ? 'discbox on' : 'discbox'}>
+              <span className="eyebrow">Discount (optional)</span>
+              <div className="discrow">
+                <input
+                  value={ci.discount}
+                  onChange={(e) => set('discount', e.target.value.replace(/[^0-9.]/g, ''))}
+                  placeholder="0"
+                  inputMode="decimal"
+                  title={ci.discountType === 'percent' ? 'Percent of the items total' : 'Amount in US$'}
+                />
+                <div className="segmini">
+                  <button className={ci.discountType === 'percent' ? 'on' : ''} onClick={() => set('discountType', 'percent')}>
+                    %
+                  </button>
+                  <button className={ci.discountType === 'amount' ? 'on' : ''} onClick={() => set('discountType', 'amount')}>
+                    US$
+                  </button>
+                </div>
+                {ci.discount && (
+                  <button className="roundbtn" title="Remove the discount" onClick={() => set('discount', '')}>
+                    <Icon name="x" />
+                  </button>
+                )}
+              </div>
+              {sums.hasDiscount && (
+                <input className="disclabel" value={ci.discountLabel} onChange={(e) => set('discountLabel', e.target.value)} placeholder={DEFAULT_DISCOUNT_LABEL} title="Printed before the discount amount" />
+              )}
+              {ci.discount && !sums.hasDiscount && <span className="fieldnote muted">No discount: the items total is 0.</span>}
+            </div>
+            {sums.hasDiscount && (
+              <>
+                <div className="tbox">
+                  <span className="eyebrow">Subtotal US$</span>
+                  <b>{fmtMoney(sums.subtotal)}</b>
+                </div>
+                <div className="tbox disc">
+                  <span className="eyebrow">Discount{sums.percentText ? ` ${sums.percentText}` : ''}</span>
+                  <b>− {fmtMoney(sums.discount)}</b>
+                </div>
+              </>
+            )}
             <div className="tbox dark">
-              <span className="eyebrow">Total US$</span>
-              <b>{fmtMoney(totals.amount)}</b>
+              <span className="eyebrow">{sums.hasDiscount ? 'Total after discount US$' : 'Total US$'}</span>
+              <b>{fmtMoney(sums.total)}</b>
             </div>
           </div>
         </div>
@@ -717,7 +772,7 @@ export default function InvoiceEditor({ request, onHandled, go }: { request: Ope
           {busy ||
             (lastSave && !dirty
               ? [lastSave.fox || 'Saved.', ...lastSave.warnings].join('  ·  ')
-              : `${ci.lines.length} items · ${totals.ctns} cartons · US$ ${fmtMoney(totals.amount)}${dirty ? ' · unsaved changes' : ''}`)}
+              : `${ci.lines.length} items · ${totals.ctns} cartons · US$ ${fmtMoney(sums.total)}${sums.hasDiscount ? ` (after US$ ${fmtMoney(sums.discount)} discount)` : ''}${dirty ? ' · unsaved changes' : ''}`)}
         </span>
         {writeOn && (
           <label className="check" style={{ color: '#fff' }} title="Also create / update the record in the FoxPro shipping table">
@@ -824,7 +879,7 @@ export function DeleteInvoice({ ci, writeOn, onClose, onDone }: { ci: Pick<Comme
   )
 }
 
-function ProformaBrowser({ onClose, onPick }: { onClose: () => void; onPick: (p: ProformaSummary) => void }) {
+export function ProformaBrowser({ onClose, onPick }: { onClose: () => void; onPick: (p: ProformaSummary) => void }) {
   const toast = useToast()
   const [q, setQ] = useState('')
   const [rows, setRows] = useState<ProformaSummary[] | null>(null)

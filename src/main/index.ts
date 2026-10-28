@@ -5,7 +5,7 @@ import type { Api } from '@shared/ipc'
 import { ADMIN_METHODS, PUBLIC_METHODS } from '@shared/ipc'
 import { checkInvoice, normalizeInvoice, todayIso, type CommercialInvoice } from '@shared/invoice'
 import { invoiceFromFox, KEY_FIELD } from '@shared/foxMap'
-import type { Session, Stats } from '@shared/types'
+import type { SalePoint, Session, Stats } from '@shared/types'
 import { loadSettings, saveSettings } from './settings'
 import { safeWriteFile } from './safety'
 import { readAuth, hashPassword, verifyPassword, Throttle, type AuthFile } from './auth'
@@ -15,6 +15,11 @@ import { ProformaSource } from './proformaSource'
 import * as fox from './foxShipping'
 import { safetyCopy, backupNow } from './backup'
 import { invoiceHtml } from './pdf/invoiceTemplate'
+import { packingHtml } from './pdf/packingTemplate'
+import { recordHtml } from './pdf/recordTemplate'
+import { checkRecord, monthTitle, normalizeRecord, rowFromInvoice, type ShippingRecord } from '@shared/shippingRecord'
+import { packingTotals } from '@shared/packing'
+import { checkPackingList, normalizePackingList, type PackingList } from '@shared/packing'
 import { renderPdf } from './pdf/render'
 
 // SHIP_DATA_DIR: another data folder, for trying the app out without touching the real one.
@@ -33,7 +38,7 @@ const authFile = () => join(userData(), 'auth.json')
 const settingsFile = () => join(userData(), 'settings.json')
 
 function requireAdmin() {
-  if (!admin) throw new Error('Only the admin can do this: open Settings with the admin password.')
+  if (!admin) throw new Error('Only the admin can do this. Enter the admin password first.')
 }
 
 function sqliteVersion(): string {
@@ -65,6 +70,23 @@ async function beforeFoxWrite(path: string, indexes: string[]) {
 
 function pdfName(ci: CommercialInvoice): string {
   return `Commercial Invoice ${ci.invoiceNo || 'draft'}`.replace(/[\\/:*?"<>|]+/g, '-').trim() + '.pdf'
+}
+
+function packingPdfName(pl: PackingList): string {
+  return `Packing List ${pl.invoiceNo || 'draft'}`.replace(/[\\/:*?"<>|]+/g, '-').trim() + '.pdf'
+}
+
+async function packingPdf(pl: PackingList) {
+  const s = await loadSettings()
+  return renderPdf(packingHtml(s.company, pl), join(userData(), 'render'))
+}
+
+function recordPdfName(r: ShippingRecord): string {
+  return `Shipping Record ${monthTitle(r.month)}`.replace(/[\\/:*?"<>|]+/g, '-').trim() + '.pdf'
+}
+
+async function recordPdf(r: ShippingRecord) {
+  return renderPdf(recordHtml(r), join(userData(), 'render'))
 }
 
 async function invoicePdf(ci: CommercialInvoice) {
@@ -238,6 +260,8 @@ const handlers: Api = {
   },
   async invoiceSave(input, toFoxPro) {
     checkInvoice(input)
+    // a saved invoice can only be changed by the admin
+    if (input.id && store.get(input.id)) requireAdmin()
     const s = await loadSettings()
     let ci = normalizeInvoice(input, s.defaults)
     if (!ci.invoiceNo.trim()) throw new Error('Type the commercial invoice no first.')
@@ -314,6 +338,132 @@ const handlers: Api = {
     const err = await shell.openPath(file)
     if (err) throw new Error(err)
   },
+  packingList: async (q) => store.packingList(q),
+  async packingGet(id) {
+    const pl = store.packingGet(id)
+    return pl ? normalizePackingList(pl, (await loadSettings()).defaults) : null
+  },
+  async packingSave(input) {
+    checkPackingList(input)
+    const before = input.id ? store.packingGet(input.id) : null
+    if (before) requireAdmin()
+    const pl = normalizePackingList({ ...input, id: before ? input.id : null }, (await loadSettings()).defaults)
+    if (!pl.invoiceNo.trim()) throw new Error('Type or pick the commercial invoice no first.')
+    const dup = store.packingDuplicateOf(pl.invoiceNo, before ? pl.id : null)
+    if (dup) throw new Error(`A packing list for ${pl.invoiceNo} is already saved. Open it from Packing Lists instead.`)
+    const saved = store.packingSave(pl)
+    store.log({ at: Date.now(), action: before ? 'update' : 'create', target: 'packing', invoiceNo: saved.invoiceNo, recno: null, detail: before ? { before } : {} })
+    return saved
+  },
+  async packingDelete(id) {
+    const pl = store.packingGet(id)
+    if (!pl) return 'Already deleted.'
+    store.packingDelete(id)
+    store.log({ at: Date.now(), action: 'delete', target: 'packing', invoiceNo: pl.invoiceNo, recno: null, detail: { packingList: pl } })
+    return `Deleted the packing list for ${pl.invoiceNo}.`
+  },
+  async packingPreview(pl) {
+    checkPackingList(pl)
+    const r = await packingPdf(pl)
+    return { pdf: r.pdf.toString('base64'), pages: r.pages }
+  },
+  async packingSavePdf(pl) {
+    checkPackingList(pl)
+    const res = await dialog.showSaveDialog(win!, { defaultPath: join(app.getPath('documents'), packingPdfName(pl)), filters: [{ name: 'PDF', extensions: ['pdf'] }] })
+    if (res.canceled || !res.filePath) return null
+    const r = await packingPdf(pl)
+    await safeWriteFile(res.filePath, r.pdf)
+    return res.filePath
+  },
+  async packingPrint(pl) {
+    checkPackingList(pl)
+    const r = await packingPdf(pl)
+    const file = join(userData(), 'print', packingPdfName(pl))
+    await safeWriteFile(file, r.pdf)
+    const err = await shell.openPath(file)
+    if (err) throw new Error(err)
+  },
+  recordList: async () => store.recordList(),
+  recordGet: async (id) => {
+    const r = store.recordGet(id)
+    return r ? normalizeRecord(r) : null
+  },
+  recordForMonth: async (month) => {
+    const id = store.recordForMonth(month)
+    const r = id ? store.recordGet(id) : null
+    return r ? normalizeRecord(r) : null
+  },
+  async recordSave(input) {
+    checkRecord(input)
+    const before = input.id ? store.recordGet(input.id) : null
+    if (before) requireAdmin()
+    if (!/^\d{4}-\d{2}$/.test(input.month)) throw new Error('Choose the month of the record.')
+    const rec = normalizeRecord({ ...input, id: before ? input.id : null })
+    const dup = store.recordForMonth(rec.month, before ? rec.id : null)
+    if (dup) throw new Error(`The shipping record for ${monthTitle(rec.month)} is already saved. Open it from "Saved records" instead.`)
+    const saved = store.recordSave(rec)
+    store.log({ at: Date.now(), action: before ? 'update' : 'create', target: 'record', invoiceNo: monthTitle(saved.month), recno: null, detail: before ? { before } : {} })
+    return saved
+  },
+  async recordDelete(id) {
+    const r = store.recordGet(id)
+    if (!r) return 'Already deleted.'
+    store.recordDelete(id)
+    store.log({ at: Date.now(), action: 'delete', target: 'record', invoiceNo: monthTitle(r.month), recno: null, detail: { record: r } })
+    return `Deleted the shipping record for ${monthTitle(r.month)}.`
+  },
+  async recordRowFor(invoiceNo) {
+    const no = String(invoiceNo ?? '').trim()
+    if (!no) return null
+    const s = await loadSettings()
+    // 1. a commercial invoice saved in the app (CBM from its packing list, when there is one)
+    const id = store.duplicateOf(no, null)
+    const saved = id ? store.get(id) : null
+    if (saved) {
+      const ci = normalizeInvoice(saved, s.defaults)
+      const plId = store.packingDuplicateOf(ci.invoiceNo, null)
+      const pl = plId ? store.packingGet(plId) : null
+      const cbm = pl ? packingTotals(pl.lines).cbm : 0
+      return rowFromInvoice(ci, cbm ? cbm.toFixed(2) : '', 'app')
+    }
+    // 2. a record in the FoxPro shipping table (made by the old program)
+    if (s.shippingPath) {
+      const want = no.toUpperCase()
+      const hit = (await fox.loadRows(s.shippingPath)).rows.find((r) => !r.deleted && r.invoiceNo.toUpperCase() === want)
+      if (hit) {
+        const { values } = await fox.readRecordValues(s.shippingPath, hit.recno)
+        const row = rowFromInvoice(invoiceFromFox(values, hit.recno, s.defaults), '', 'foxpro')
+        const total = Number(values.TOTAL_AMT ?? 0) || 0
+        const comm = Number(values.COMM_AMT ?? 0) || 0
+        row.totalAmt = total ? total.toFixed(2) : ''
+        row.commDiscVat = comm ? comm.toFixed(2) : ''
+        row.amount = total ? (total - comm).toFixed(2) : ''
+        return row
+      }
+    }
+    return null
+  },
+  async recordPreview(r) {
+    checkRecord(r)
+    const out = await recordPdf(r)
+    return { pdf: out.pdf.toString('base64'), pages: out.pages }
+  },
+  async recordSavePdf(r) {
+    checkRecord(r)
+    const res = await dialog.showSaveDialog(win!, { defaultPath: join(app.getPath('documents'), recordPdfName(r)), filters: [{ name: 'PDF', extensions: ['pdf'] }] })
+    if (res.canceled || !res.filePath) return null
+    const out = await recordPdf(r)
+    await safeWriteFile(res.filePath, out.pdf)
+    return res.filePath
+  },
+  async recordPrint(r) {
+    checkRecord(r)
+    const out = await recordPdf(r)
+    const file = join(userData(), 'print', recordPdfName(r))
+    await safeWriteFile(file, out.pdf)
+    const err = await shell.openPath(file)
+    if (err) throw new Error(err)
+  },
   async openPath(p) {
     const err = await shell.openPath(p)
     if (err) throw new Error(err)
@@ -332,6 +482,20 @@ const handlers: Api = {
     }
     const from = new Date(Date.now() - 30 * 86400000)
     return { ...st, foxRecords, proformas, upcoming: store.timeline(todayIso(from), 10) }
+  },
+  async salesSeries() {
+    const out: SalePoint[] = []
+    const s = await loadSettings()
+    if (s.shippingPath) {
+      try {
+        for (const r of (await fox.loadRows(s.shippingPath)).rows) if (!r.deleted && r.date) out.push({ date: r.date, amount: r.amount ?? 0 })
+      } catch {
+        /* table not readable: show the app invoices only */
+      }
+    }
+    // app invoices already written to FoxPro are counted there
+    for (const r of store.list('', 100000)) if (!r.foxRecno && r.date) out.push({ date: r.date, amount: r.amount })
+    return out
   },
   changes: async () => store.changes(),
   async backupNow() {

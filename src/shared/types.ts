@@ -6,6 +6,8 @@ export interface CompanyDetails {
   name: string
   address: string
   telFax: string
+  /** printed under the tel / fax line (packing list); blank = not printed */
+  email: string
 }
 
 export interface Settings {
@@ -32,7 +34,8 @@ export const DEFAULT_SETTINGS: Settings = {
     headerNote: 'THE NAME AND ADDRESS OF THE MANUFACTURERS / PRODUCERS / EXPORTERS.',
     name: 'AMP CEYLON (PVT) LTD.',
     address: 'RING ROAD 3,PHASE 2,, EXPORT PROCESSING ZONE, KATUNAYAKE,, SRI LANKA.',
-    telFax: 'TEL : 94-11-2251026    FAX : 94-11-2251029'
+    telFax: 'TEL : 94-11-2251026    FAX : 94-11-2251029',
+    email: ''
   },
   defaults: DEFAULT_CI,
   backupPath: ''
@@ -148,7 +151,7 @@ export interface ChangeEntry {
   id: number
   at: number
   action: 'create' | 'update' | 'delete' | 'recall' | 'reindex'
-  target: 'app' | 'foxpro'
+  target: 'app' | 'foxpro' | 'packing' | 'record'
   invoiceNo: string
   recno: number | null
   detail: Record<string, unknown>
@@ -160,6 +163,12 @@ export interface SaveResult {
   fox: string
   /** values cut to fit a FoxPro field */
   warnings: string[]
+}
+
+/** One invoice for the dashboard sales chart: its date (YYYY-MM-DD) and amount. */
+export interface SalePoint {
+  date: string
+  amount: number
 }
 
 export interface Stats {

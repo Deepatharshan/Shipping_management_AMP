@@ -2,52 +2,11 @@ import { useEffect, useState } from 'react'
 import type { FoxStatus, PmaStatus, Session, Settings } from '@shared/types'
 import type { CiDefaults } from '@shared/invoice'
 import { Icon } from '../icons'
-import { ConfirmDialog, errorText, fmtDate, fmtTime, Switch, useToast } from '../ui'
+import { AdminGate, ConfirmDialog, errorText, fmtDate, fmtTime, Switch, useToast } from '../ui'
 
 export default function SettingsScreen({ session, reload }: { session: Session; reload: () => void }) {
-  if (!session.admin) return <AdminGate onOpen={reload} />
+  if (!session.admin) return <AdminGate title="Settings" sub="Links to the data, FoxPro writing, invoice defaults and logins." button="Open Settings" onOpen={reload} />
   return <SettingsForm reload={reload} />
-}
-
-function AdminGate({ onOpen }: { onOpen: () => void }) {
-  const [pw, setPw] = useState('')
-  const [msg, setMsg] = useState('')
-  return (
-    <>
-      <div className="pagehead">
-        <div>
-          <h1>Settings</h1>
-          <div className="sub">Links to the data, FoxPro writing, invoice defaults and logins.</div>
-        </div>
-      </div>
-      <form
-        className="card"
-        style={{ maxWidth: 440 }}
-        onSubmit={async (e) => {
-          e.preventDefault()
-          const r = await window.api.adminLogin(pw)
-          if (r.ok) onOpen()
-          else {
-            setMsg(r.message)
-            setPw('')
-          }
-        }}
-      >
-        <div className="cardhead">
-          <Icon name="lock" />
-          <h2>Admin password</h2>
-        </div>
-        <label className="f">
-          Password
-          <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} autoFocus />
-        </label>
-        {msg && <p className="error mt">{msg}</p>}
-        <button className="btn dark mt" disabled={!pw}>
-          Open Settings
-        </button>
-      </form>
-    </>
-  )
 }
 
 function SettingsForm({ reload }: { reload: () => void }) {
@@ -304,6 +263,10 @@ function SettingsForm({ reload }: { reload: () => void }) {
           <label className="f mt">
             Tel / fax
             <input value={s.company.telFax} onChange={(e) => up({ company: { ...s.company, telFax: e.target.value } })} />
+          </label>
+          <label className="f mt">
+            Email (printed on the packing list)
+            <input value={s.company.email ?? ''} onChange={(e) => up({ company: { ...s.company, email: e.target.value } })} placeholder="dgl@eureka.lk" />
           </label>
         </div>
         <div className="card">

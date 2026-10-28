@@ -5,7 +5,7 @@
  * Field (width)        Commercial invoice
  * COM_INV_NO (15)      invoice no                     ← the key of SHIPPING.IDX
  * DTE_OF_INV (D)       date
- * TOTAL_AMT (N10.2)    total amount
+ * TOTAL_AMT (N10.2)    total amount (after the discount, if any)
  * VASSEL (20)          vessel
  * SHIP_DATE (D)        ETD          ARIVAL_DTE (D)   ETA
  * CONT_NO (25)         container no                  SEAL_NR (15)  seal no
@@ -18,7 +18,7 @@
  * (FREIGHT, GCEC_CHGS, …, FRGHT_CHG1 … FUMIG_CHG7, ADV_TAKEN, BALANCE, BNK_CHGS): those belong to the
  * old program's expense screens and are left exactly as they are.
  */
-import { emptyFox, invoiceTotals, newInvoice, type CiDefaults, type CommercialInvoice, type FoxExtra } from './invoice'
+import { emptyFox, invoiceSums, newInvoice, type CiDefaults, type CommercialInvoice, type FoxExtra } from './invoice'
 
 export const KEY_FIELD = 'COM_INV_NO'
 
@@ -94,8 +94,9 @@ export type FoxValue = string | number | null
 export function foxValues(ci: CommercialInvoice): Record<string, FoxValue> {
   const out: Record<string, FoxValue> = {}
   for (const [k, f] of Object.entries(FOX_MAIN_FIELDS)) out[f] = (ci as unknown as Record<string, string>)[k] ?? ''
-  // an old shipment opened from the table has no item lines: its total is then left as it is
-  if (ci.lines.length) out.TOTAL_AMT = invoiceTotals(ci.lines).amount
+  // an old shipment opened from the table has no item lines: its total is then left as it is.
+  // The total written is what the customer pays (after the discount, if any).
+  if (ci.lines.length) out.TOTAL_AMT = invoiceSums(ci).total
   for (const [k, f] of Object.entries(FOX_EXTRA_FIELDS)) out[f] = ci.fox[k as keyof FoxExtra] ?? ''
   if (!String(out.INV_NO_AMP ?? '').trim()) out.INV_NO_AMP = ci.invoiceNo
   return out
