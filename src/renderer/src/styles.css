@@ -536,3 +536,76 @@ table.pltable .calc { display: block; font-size: 10px; color: var(--muted); text
   .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 16px; }
   .kpi:nth-child(3) { padding-left: 0; border-left: 0; }
 }
+
+/* ---------- edit access ---------- */
+.acc-steps { margin: 4px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 16px; font-size: 13px; line-height: 1.5; }
+.acc-steps li::marker { font-weight: 700; color: var(--muted); }
+.acc-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.acc-code { font-family: "Cascadia Mono", Consolas, monospace; font-size: 18px; font-weight: 700; letter-spacing: 2px; background: var(--panel-2); border: 1px dashed var(--line-2); border-radius: 10px; padding: 6px 12px; }
+.acc-code.big { font-size: 20px; }
+.acc-input { font-family: "Cascadia Mono", Consolas, monospace; font-size: 15px; letter-spacing: 1.5px; width: 230px; text-transform: uppercase; }
+.acc-hint { font-size: 11.5px; color: var(--muted); margin-top: 5px; }
+.acc-ok { color: var(--ok); font-size: 12.5px; font-weight: 600; }
+.acc-note { background: var(--panel-2); border-radius: 12px; padding: 10px 12px; font-size: 12.5px; }
+.acc-open { background: var(--ok-soft); border-radius: 14px; padding: 12px 14px; }
+.acc-open .acc-big { display: flex; align-items: center; gap: 8px; font-size: 15px; color: var(--ok); }
+.acc-open p { margin: 6px 0 10px; font-size: 12.5px; }
+.acc-admin { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line); }
+.linkbtn { border: 0; background: none; padding: 0; color: var(--muted); font-size: 12px; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.linkbtn:hover { color: var(--text); }
+.acc-times { margin: 12px 0 0; flex-wrap: wrap; }
+.acc-result { margin-top: 14px; background: var(--panel-2); border-radius: 14px; padding: 12px 14px; }
+.sb-access { display: flex; align-items: center; gap: 9px; min-height: 32px; padding: 6px 12px; border: 0; border-radius: 10px; background: rgba(255,255,255,.04);
+  color: #a9adb5; font-size: 12px; font-weight: 500; cursor: pointer; white-space: nowrap; text-align: left; }
+.sb-access:hover { background: rgba(255,255,255,.08); color: #fff; }
+.sb-access.on { background: rgba(74,222,128,.12); color: #86efac; }
+.sb-access svg { flex-shrink: 0; margin: 0 3px; }
+.app.collapsed .sb-access { justify-content: center; padding: 0; }
+
+/* calm sidebar: navy-slate, no bright accents */
+.sidebar { background: linear-gradient(180deg, #121a27 0%, #0c121c 100%); }
+.amplogo { flex-shrink: 0; display: block; box-shadow: 0 6px 16px -8px rgba(0,0,0,.6); border-radius: 12px; }
+.sb-cta { background: rgba(255,255,255,.07); color: #f1f3f6; box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); font-weight: 600; }
+.sb-cta:hover { background: rgba(255,255,255,.12); transform: none; box-shadow: inset 0 0 0 1px rgba(255,255,255,.2); }
+.sb-item.active { background: rgba(255,255,255,.08); box-shadow: none; }
+.sb-item.active::before { background: #e5e9f0; }
+.sb-item.active .ic { color: #fff; }
+.sb-user .avatar { background: #2a3a52; }
+.app.collapsed .amplogo { width: 40px; height: 40px; }
+
+/* ---------- login (two panels) ---------- */
+.loginpage { height: 100%; display: grid; place-items: center; padding: 24px;
+  background: radial-gradient(900px 500px at 15% 10%, #e7ecf4 0%, transparent 60%), linear-gradient(180deg, #f3f5f8 0%, #e9ecf1 100%); }
+.loginshell { width: min(920px, 100%); min-height: 520px; display: grid; grid-template-columns: 1.05fr 1fr; background: #fff; border-radius: 24px; overflow: hidden;
+  box-shadow: 0 1px 2px rgba(16,24,40,.06), 0 30px 70px -20px rgba(16,24,40,.28); }
+.loginbrand { position: relative; display: flex; flex-direction: column; padding: 34px 34px 0; color: #dbe3ee; overflow: hidden;
+  background: radial-gradient(520px 320px at 100% 0%, rgba(96,165,250,.16), transparent 70%), linear-gradient(160deg, #1b2f4d 0%, #0e1c31 100%); }
+.lb-top { display: flex; align-items: center; gap: 14px; }
+.lb-name { color: #fff; font-size: 19px; font-weight: 700; letter-spacing: -.3px; }
+.lb-co { color: #9fb0c6; font-size: 12px; margin-top: 2px; }
+.lb-mid { margin-top: 46px; position: relative; z-index: 1; }
+.lb-mid h2 { color: #fff; font-size: 24px; font-weight: 600; letter-spacing: -.5px; margin: 0; }
+.lb-mid p { color: #a9b8cb; font-size: 13px; margin: 8px 0 22px; line-height: 1.5; }
+.lb-mid ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.lb-mid li { display: flex; align-items: center; gap: 12px; font-size: 13px; color: #d5deea; }
+.lb-ic { width: 30px; height: 30px; border-radius: 9px; background: rgba(255,255,255,.08); display: grid; place-items: center; flex-shrink: 0; color: #fff; }
+.lb-ic svg { width: 15px; height: 15px; }
+.lb-waves { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: 90px; }
+.loginform { display: flex; flex-direction: column; gap: 14px; padding: 46px 44px 26px; justify-content: center; }
+.loginform h1 { font-size: 26px; font-weight: 600; letter-spacing: -.6px; margin: 0; }
+.loginform .sub { color: var(--muted); margin: -8px 0 8px; font-size: 13px; }
+.lf-input { position: relative; display: flex; align-items: center; }
+.lf-input > svg { position: absolute; left: 12px; width: 16px; height: 16px; color: #8a909a; pointer-events: none; }
+.lf-input input { flex: 1; padding: 11px 40px 11px 38px; font-size: 13.5px; border-radius: 12px; background: var(--panel-2); }
+.lf-eye { position: absolute; right: 6px; width: 30px; height: 30px; border: 0; background: transparent; border-radius: 8px; color: #8a909a; display: grid; place-items: center; cursor: pointer; }
+.lf-eye:hover { background: #e6e9ee; color: var(--text); }
+.lf-eye svg { width: 16px; height: 16px; }
+.lf-error { display: flex; align-items: center; gap: 8px; background: var(--danger-soft); color: #912018; border-radius: 10px; padding: 9px 12px; font-size: 12.5px; }
+.lf-error svg { width: 14px; height: 14px; flex-shrink: 0; }
+.lf-submit { margin-top: 6px; height: 44px; border: 0; border-radius: 12px; background: #1b2f4d; color: #fff; font-size: 14px; font-weight: 600; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 8px; transition: background .15s; }
+.lf-submit:hover { background: #24406a; }
+.lf-submit:disabled { opacity: .5; cursor: default; }
+.lf-submit svg { width: 16px; height: 16px; }
+.loginform .credit { text-align: center; color: var(--muted); font-size: 11px; margin-top: auto; padding-top: 18px; }
+@media (max-width: 760px) { .loginshell { grid-template-columns: 1fr; } .loginbrand { display: none; } }

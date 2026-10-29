@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { blankLine, DEFAULT_CI, newInvoice } from '../src/shared/invoice'
 import { blankRow, monthTitle, newRecord, recordTotals, rowFromInvoice, rupees } from '../src/shared/shippingRecord'
-import { ADMIN_METHODS } from '../src/shared/ipc'
+import { EDIT_METHODS } from '../src/shared/ipc'
 import { ShipStore } from '../src/main/store'
 import { openNodeSqlite } from './helpers'
 
@@ -68,8 +68,8 @@ describe('monthly shipping record', () => {
     store.close()
   })
 
-  it('needs the admin to delete a record', () => {
-    expect(ADMIN_METHODS.has('recordDelete')).toBe(true)
-    expect(ADMIN_METHODS.has('recordSave')).toBe(false) // a new record is fine; changing a saved one is checked in the handler
+  it('needs edit access to delete a record', () => {
+    expect(EDIT_METHODS.has('recordDelete')).toBe(true)
+    expect(EDIT_METHODS.has('recordSave')).toBe(false) // a new record is fine; changing a saved one is checked in the handler
   })
 })

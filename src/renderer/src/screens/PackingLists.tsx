@@ -28,7 +28,7 @@ export default function PackingLists({ go }: { go: (s: Screen, r?: OpenRequest) 
       <div className="pagehead">
         <div>
           <h1>Packing Lists</h1>
-          <div className="sub">Every packing / weight list saved in the app. Double-click to open; changing or deleting one needs the admin password.</div>
+          <div className="sub">Every packing / weight list saved in the app. Double-click to open; changing or deleting one needs edit access.</div>
         </div>
         <div className="actions">
           <SearchBox value={q} onChange={setQ} placeholder="Invoice no, PI, customer, vessel, container, item…" />

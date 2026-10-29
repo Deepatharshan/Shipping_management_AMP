@@ -199,7 +199,7 @@ export default function ShippingRecordScreen() {
         <div>
           <h1>Shipping Record · {title}</h1>
           <div className="sub">
-            {rec.id ? 'Saved in the app — changes need the admin password' : 'Not saved yet'}
+            {rec.id ? 'Saved in the app — changes need edit access' : 'Not saved yet'}
             {` · ${rec.rows.length} invoice${rec.rows.length === 1 ? '' : 's'}`}
             {dirty ? ' · unsaved changes' : ''}
           </div>
@@ -474,8 +474,7 @@ function RowCard({
         {F({ k: 'invDate', label: 'Inv. date', type: 'date' })}
         {F({ k: 'cmbRefNo', label: 'CMB ref.', up: true })}
         {F({ k: 'orderNo', label: 'Order no', up: true })}
-        {F({ k: 'customer', label: 'Customer', up: true })}
-        {F({ k: 'notify', label: 'Second name line', up: true })}
+        {F({ k: 'customer', label: 'Customer', up: true, wide: true })}
       </div>
 
       <div className="recsec">Amounts</div>

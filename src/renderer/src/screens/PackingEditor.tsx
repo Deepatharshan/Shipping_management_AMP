@@ -234,7 +234,7 @@ export default function PackingEditor({ request, onHandled, go }: { request: Ope
         <div>
           <h1>{pl.invoiceNo ? `Packing / Weight List ${pl.invoiceNo}` : 'New Packing / Weight List'}</h1>
           <div className="sub">
-            {pl.id ? 'Saved in the app — changes need the admin password' : 'Not saved yet'}
+            {pl.id ? 'Saved in the app — changes need edit access' : 'Not saved yet'}
             {pl.piNo ? ` · from PI ${pl.piNo}` : ''}
             {pl.invoiceId ? ' · linked to the saved invoice' : ''}
             {dirty ? ' · unsaved changes' : ''}

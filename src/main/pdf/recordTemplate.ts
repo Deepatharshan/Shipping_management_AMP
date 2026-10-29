@@ -48,8 +48,7 @@ export function recordHtml(rec: ShippingRecord): string {
         <div class="g sub">
           <div class="sp6">${esc(r.orderNo)}</div><div>${esc(r.vessel)}</div><div class="sp13"></div><div class="sp2">${esc(r.portDelivery)}</div>
         </div>
-        ${r.customer.trim() ? `<div class="nm">${esc(r.customer)}</div>` : ''}
-        ${r.notify.trim() ? `<div class="nm">${esc(r.notify)}</div>` : ''}
+        ${(r.customer.trim() || r.notify.trim()) ? `<div class="nm">${esc(r.customer.trim() || r.notify.trim())}</div>` : ''}
       </div>`
     })
     .join('')
@@ -161,7 +160,11 @@ export function recordHtml(rec: ShippingRecord): string {
   // the last page: SUB TOTAL before the GRAND TOTAL
   var grand = body.querySelector('.grand');
   if (grand && body.querySelector('.row')) body.insertBefore(subTotal(body), grand);
-  pages.forEach(function (p, i) { p.querySelector('.pg .n').textContent = String(i + 1); });
+  pages.forEach(function (p, i) {
+    p.querySelector('.pg .n').textContent = String(i + 1);
+    // the column titles only on pages that have invoice rows (not on a GRAND TOTAL page)
+    if (!p.querySelector('.body .row')) { var ch = p.querySelector('.colhead'); if (ch) ch.parentNode.removeChild(ch); }
+  });
   src.parentNode.removeChild(src);
   window.__pageCount = pages.length;
   window.__paginated = true;

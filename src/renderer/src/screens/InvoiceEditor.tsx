@@ -198,6 +198,7 @@ export default function InvoiceEditor({ request, onHandled, go }: { request: Ope
     if (!ci) return
     if (!ci.invoiceNo.trim()) return toast('Type the commercial invoice no first.', 'warn')
     if (ci.id && !(await ensureAdmin(`save changes to the saved invoice ${ci.invoiceNo}`))) return
+    if (!ci.id && ci.foxRecno && toFox && settings?.writeFoxPro && !(await ensureAdmin(`update FoxPro record ${ci.foxRecno}`))) return
     setBusy('Saving…')
     try {
       const r = await window.api.invoiceSave(ci, toFox)
@@ -843,33 +844,24 @@ export default function InvoiceEditor({ request, onHandled, go }: { request: Ope
           }}
         />
       )}
-      {confirm?.kind === 'delete' && ci.id && <DeleteInvoice ci={ci} writeOn={writeOn} onClose={() => setConfirm(null)} onDone={() => (setConfirm(null), go('shipments'))} />}
+      {confirm?.kind === 'delete' && ci.id && <DeleteInvoice ci={ci} onClose={() => setConfirm(null)} onDone={() => (setConfirm(null), go('shipments'))} />}
     </>
   )
 }
 
-export function DeleteInvoice({ ci, writeOn, onClose, onDone }: { ci: Pick<CommercialInvoice, 'id' | 'invoiceNo' | 'foxRecno'>; writeOn: boolean; onClose: () => void; onDone: () => void }) {
+export function DeleteInvoice({ ci, onClose, onDone }: { ci: Pick<CommercialInvoice, 'id' | 'invoiceNo' | 'foxRecno'>; onClose: () => void; onDone: () => void }) {
   const toast = useToast()
-  const [alsoFox, setAlsoFox] = useState(false)
   return (
     <ConfirmDialog
       title={`Delete ${ci.invoiceNo}?`}
-      text="The invoice is removed from the app's database. The change log keeps a copy of it."
+      text={`The invoice is removed from the app's database. The change log keeps a copy of it.${ci.foxRecno ? ` FoxPro record ${ci.foxRecno} is not touched — records in the FoxPro table are never deleted from this app.` : ''}`}
       confirmWord={ci.invoiceNo}
       confirmLabel="Delete"
       danger
-      extra={
-        ci.foxRecno && writeOn ? (
-          <label className="check" style={{ marginBottom: 12 }}>
-            <input type="checkbox" checked={alsoFox} onChange={(e) => setAlsoFox(e.target.checked)} />
-            Also mark FoxPro record {ci.foxRecno} as deleted (it can be recalled later)
-          </label>
-        ) : null
-      }
       onClose={onClose}
       onConfirm={async () => {
         try {
-          toast(await window.api.invoiceDelete(ci.id!, alsoFox))
+          toast(await window.api.invoiceDelete(ci.id!))
           onDone()
         } catch (e) {
           toast(errorText(e), 'error')

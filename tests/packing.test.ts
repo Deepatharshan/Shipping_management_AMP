@@ -7,7 +7,7 @@ import { blankLine, DEFAULT_CI, newInvoice } from '../src/shared/invoice'
 import {
   autoCbm, blankPlLine, measureText, newPackingList, numberCartons, packingCode, packingFromInvoice, packingTotals, type PlLine
 } from '../src/shared/packing'
-import { ADMIN_METHODS } from '../src/shared/ipc'
+import { ADMIN_METHODS, EDIT_METHODS } from '../src/shared/ipc'
 import { openNodeSqlite } from './helpers'
 
 // the sample PACKING/WEIGHT LIST for M/23/002: [ctns, units, nett/ctn, gross/ctn, L, W, H, printed CBM]
@@ -90,8 +90,11 @@ describe('packing / weight list', () => {
     store.close()
   })
 
-  it('needs the admin to delete or to read the change log', () => {
-    for (const m of ['invoiceDelete', 'packingDelete', 'changes'] as const) expect(ADMIN_METHODS.has(m)).toBe(true)
-    expect(ADMIN_METHODS.has('packingSave')).toBe(false) // a new list is fine; changing a saved one is checked in the handler
+  it('needs edit access to delete, and the admin for the change log', () => {
+    // deleting saved documents and editing FoxPro records: edit access (an access code, or the admin)
+    for (const m of ['invoiceDelete', 'packingDelete', 'foxUpdateFields', 'foxSetDeleted'] as const) expect(EDIT_METHODS.has(m)).toBe(true)
+    // the change log, settings and making access codes: the admin password only
+    for (const m of ['changes', 'saveSettings', 'makeAccessCode'] as const) expect(ADMIN_METHODS.has(m)).toBe(true)
+    expect(ADMIN_METHODS.has('packingSave') || EDIT_METHODS.has('packingSave')).toBe(false) // a new list is fine; changing a saved one is checked in the handler
   })
 })

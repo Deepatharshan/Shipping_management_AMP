@@ -100,11 +100,12 @@ export function invoiceHtml(company: CompanyDetails, ci: CommercialInvoice): str
       <div class="g trow nrow"><div class="tl">NET TOTAL :</div><div></div><div></div><div></div>
         <div></div><div></div><div class="num cur">US$</div><div class="num gt">${esc(sums.total.toFixed(2))}</div></div>` : ''}
       <div class="tlabel">${esc(ci.totalsLabel)}</div>
-      <div class="say"><b>Say :</b> ${esc(words)}</div>
     </div>`
 
+  const say = `<div class="say"><b>Say :</b> ${esc(words)}</div>`
+
   const marks = ci.shippingMarks.trim() || ci.orderReference.trim()
-    ? `<div class="blk marks">
+    ? `<div class="marks">
         ${ci.shippingMarks.trim() ? `<div class="mk"><b>Shipping Marks :</b> <span>${ml(ci.shippingMarks)}</span></div>` : ''}
         ${ci.orderReference.trim() ? `<div class="mk"><b>Applicant's Order reference :</b> <span>${ml(ci.orderReference)}</span></div>` : ''}
       </div>`
@@ -112,18 +113,22 @@ export function invoiceHtml(company: CompanyDetails, ci: CommercialInvoice): str
 
   const certLines = ci.certify.split(/\r?\n/).map((x) => x.trim()).filter(Boolean)
   const certify = certLines.length
-    ? `<div class="blk cert"><div class="ch">We hereby certify that</div><div class="cl">${certLines
+    ? `<div class="cert"><div class="ch">We hereby certify that</div><div class="cl">${certLines
         .map((x, i) => `<div><span class="cn">${String.fromCharCode(97 + i)})</span>${esc(x)}</div>`)
         .join('')}</div></div>`
     : ''
 
-  const hs = ci.hsNote.trim() ? `<div class="blk hsn">${ml(ci.hsNote)}</div>` : ''
+  const hs = ci.hsNote.trim() ? `<div class="hsn">${ml(ci.hsNote)}</div>` : ''
 
   const bene = `
-    <div class="blk bene">
+    <div class="bene">
       <div class="bh">Beneficiary</div>
       <div class="bcols"><div class="bl">${ml(ci.beneficiary)}</div><div class="br">${ml(ci.bank)}</div></div>
     </div>`
+
+  // From "Say :" to the bank details is one block: it is never split, so when it does not fit under
+  // the totals it moves to the next page as a whole.
+  const closing = `<div class="blk closing">${say}${marks}${certify}${hs}${bene}</div>`
 
   return `<!doctype html>
 <html><head><meta charset="utf-8"><title>${esc(ci.invoiceNo || 'Commercial invoice')}</title>
@@ -134,7 +139,7 @@ export function invoiceHtml(company: CompanyDetails, ci: CommercialInvoice): str
   body { font-family: Arial, Helvetica, sans-serif; font-size: 8.6pt; color: #000; }
   .page { width: 210mm; height: 297mm; padding: 9mm 11mm 9mm 11mm; display: flex; flex-direction: column; position: relative; page-break-after: always; overflow: hidden; }
   .page:last-child { page-break-after: auto; }
-  .serif, .note, .co, .addr, .tel, .hdr, .asn, .colhead, .pi, .totals, .marks, .cert, .hsn, .bene { font-family: "Times New Roman", Times, serif; }
+  .serif, .note, .co, .addr, .tel, .hdr, .asn, .colhead, .pi, .totals, .closing, .marks, .cert, .hsn, .bene { font-family: "Times New Roman", Times, serif; }
   .pgno { position: absolute; top: 9mm; right: 11mm; font-weight: bold; font-size: 10pt; font-family: "Times New Roman", serif; }
   .note { text-align: center; font-weight: bold; font-size: 9.5pt; margin-top: 4mm; }
   .co { text-align: center; font-weight: bold; font-size: 15pt; letter-spacing: .3px; margin-top: 1mm; }
@@ -201,7 +206,7 @@ export function invoiceHtml(company: CompanyDetails, ci: CommercialInvoice): str
 <div id="src">
   <template id="h1">${header(true)}</template>
   <template id="hn">${header(false)}</template>
-  ${piBlock}${lineBlocks}${totalsBlock}${marks}${certify}${hs}${bene}
+  ${piBlock}${lineBlocks}${totalsBlock}${closing}
 </div>
 <script>
 (function () {
@@ -228,7 +233,11 @@ export function invoiceHtml(company: CompanyDetails, ci: CommercialInvoice): str
       body.appendChild(b);
     }
   });
-  pages.forEach(function (p, i) { p.querySelector('.pgno .n').textContent = String(i + 1); });
+  pages.forEach(function (p, i) {
+    p.querySelector('.pgno .n').textContent = String(i + 1);
+    // the item column titles only on pages that have items (not on a page of totals / closing blocks)
+    if (!p.querySelector('.body .item')) { var ch = p.querySelector('.colhead'); if (ch) ch.parentNode.removeChild(ch); }
+  });
   src.parentNode.removeChild(src);
   window.__pageCount = pages.length;
   window.__paginated = true;

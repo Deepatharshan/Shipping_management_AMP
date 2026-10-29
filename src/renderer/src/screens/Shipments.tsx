@@ -11,15 +11,11 @@ export default function Shipments({ go }: { go: (s: Screen, r?: OpenRequest) => 
   const [q, setQ] = useState('')
   const [rows, setRows] = useState<InvoiceSummary[]>([])
   const [del, setDel] = useState<InvoiceSummary | null>(null)
-  const [writeOn, setWriteOn] = useState(false)
   const load = () => window.api.invoiceList(q).then(setRows).catch((e) => toast(errorText(e), 'error'))
   useEffect(() => {
     const t = setTimeout(load, 150)
     return () => clearTimeout(t)
   }, [q])
-  useEffect(() => {
-    window.api.getSettings().then((s) => setWriteOn(s.writeFoxPro))
-  }, [])
   const open = async (id: string) => {
     const ci = await window.api.invoiceGet(id)
     if (ci) go('invoice', { kind: 'invoice', invoice: ci })
@@ -111,7 +107,7 @@ export default function Shipments({ go }: { go: (s: Screen, r?: OpenRequest) => 
           {!rows.length && <div className="empty">{q ? 'Nothing matches the search.' : 'No invoices yet.'}</div>}
         </div>
       </div>
-      {del && <DeleteInvoice ci={del} writeOn={writeOn} onClose={() => setDel(null)} onDone={() => (setDel(null), load())} />}
+      {del && <DeleteInvoice ci={del} onClose={() => setDel(null)} onDone={() => (setDel(null), load())} />}
     </>
   )
 }

@@ -1,10 +1,19 @@
 import { useState } from 'react'
 import { Icon } from './icons'
+import { AmpLogo } from './Logo'
 import { errorText } from './ui'
+
+const FEATURES: { icon: string; text: string }[] = [
+  { icon: 'receipt', text: 'Commercial invoices from proforma invoices' },
+  { icon: 'box', text: 'Packing / weight lists with CBM and weights' },
+  { icon: 'clipboard', text: 'Monthly shipping records' },
+  { icon: 'database', text: 'Kept in step with the FoxPro shipping table' }
+]
 
 export default function LoginScreen({ version, onLoggedIn }: { version?: string; onLoggedIn: () => void }) {
   const [user, setUser] = useState('')
   const [password, setPassword] = useState('')
+  const [show, setShow] = useState(false)
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -26,31 +35,70 @@ export default function LoginScreen({ version, onLoggedIn }: { version?: string;
 
   return (
     <div className="loginpage">
-      <form className="loginbox" onSubmit={submit}>
-        <div className="logo">
-          <div className="mark">
-            <Icon name="anchor" size={17} />
+      <div className="loginshell">
+        <aside className="loginbrand">
+          <div className="lb-top">
+            <AmpLogo size={52} />
+            <div>
+              <div className="lb-name">Shipping&amp;AMP</div>
+              <div className="lb-co">AMP Ceylon (Pvt) Ltd</div>
+            </div>
           </div>
-          Shipping&amp;AMP
-        </div>
-        <h1>Welcome back</h1>
-        <div className="sub">Commercial invoices, shipments and the FoxPro shipping table.</div>
-        <label className="f">
-          User name
-          <input value={user} onChange={(e) => setUser(e.target.value)} autoFocus autoComplete="off" spellCheck={false} />
-        </label>
-        <label className="f">
-          Password
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="off" />
-        </label>
-        {message && <p className="error">{message}</p>}
-        <button className="btn dark" type="submit" disabled={!user.trim() || !password || busy}>
-          {busy ? 'Checking…' : 'Log in'}
-        </button>
-        <div className="credit">
-          {version && <>v{version} · </>}AMP Ceylon (Pvt) Ltd · Developed by P.Deepatharshan
-        </div>
-      </form>
+          <div className="lb-mid">
+            <h2>Shipping management</h2>
+            <p>Everything the shipping office prints and keeps, in one place.</p>
+            <ul>
+              {FEATURES.map((f) => (
+                <li key={f.text}>
+                  <span className="lb-ic">
+                    <Icon name={f.icon} />
+                  </span>
+                  {f.text}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <svg className="lb-waves" viewBox="0 0 400 60" preserveAspectRatio="none" aria-hidden="true">
+            <path d="M0 30 C 50 10, 100 50, 150 30 S 250 10, 300 30 S 380 45, 400 32 V60 H0 Z" fill="rgba(255,255,255,.05)" />
+            <path d="M0 40 C 60 22, 110 58, 170 40 S 270 22, 330 40 S 390 50, 400 44 V60 H0 Z" fill="rgba(255,255,255,.06)" />
+          </svg>
+        </aside>
+
+        <form className="loginform" onSubmit={submit}>
+          <h1>Sign in</h1>
+          <div className="sub">Use the shipping office login.</div>
+
+          <label className="f">
+            User name
+            <div className="lf-input">
+              <Icon name="user" />
+              <input value={user} onChange={(e) => setUser(e.target.value)} autoFocus autoComplete="off" spellCheck={false} placeholder="User name" />
+            </div>
+          </label>
+          <label className="f">
+            Password
+            <div className="lf-input">
+              <Icon name="lock" />
+              <input type={show ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="off" placeholder="Password" />
+              <button type="button" className="lf-eye" title={show ? 'Hide the password' : 'Show the password'} onClick={() => setShow((v) => !v)}>
+                <Icon name={show ? 'eyeoff' : 'eye'} />
+              </button>
+            </div>
+          </label>
+          {message && (
+            <div className="lf-error">
+              <Icon name="x" /> {message}
+            </div>
+          )}
+          <button className="lf-submit" type="submit" disabled={!user.trim() || !password || busy}>
+            {busy ? 'Checking…' : 'Sign in'}
+            {!busy && <Icon name="chev" />}
+          </button>
+          <div className="credit">
+            {version && <>v{version} · </>}Developed by P.Deepatharshan
+          </div>
+        </form>
+      </div>
     </div>
   )
 }

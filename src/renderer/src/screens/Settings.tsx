@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { FoxStatus, PmaStatus, Session, Settings } from '@shared/types'
 import type { CiDefaults } from '@shared/invoice'
 import { Icon } from '../icons'
-import { AdminGate, ConfirmDialog, errorText, fmtDate, fmtTime, Switch, useToast } from '../ui'
+import { AccessCodeCard, AdminGate, ConfirmDialog, errorText, fmtDate, fmtTime, Switch, useToast } from '../ui'
 
 export default function SettingsScreen({ session, reload }: { session: Session; reload: () => void }) {
   if (!session.admin) return <AdminGate title="Settings" sub="Links to the data, FoxPro writing, invoice defaults and logins." button="Open Settings" onOpen={reload} />
@@ -83,7 +83,9 @@ function SettingsForm({ reload }: { reload: () => void }) {
         </div>
       </div>
 
-      <div className="cols c2">
+      <AccessCodeCard />
+
+      <div className="cols c2 mt">
         {/* FoxPro */}
         <div className="card">
           <div className="cardhead">

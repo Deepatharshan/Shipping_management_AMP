@@ -1,14 +1,15 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { existsSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import type { Api } from '@shared/ipc'
-import { ADMIN_METHODS, PUBLIC_METHODS } from '@shared/ipc'
+import { ADMIN_METHODS, EDIT_METHODS, PUBLIC_METHODS } from '@shared/ipc'
 import { checkInvoice, normalizeInvoice, todayIso, type CommercialInvoice } from '@shared/invoice'
 import { invoiceFromFox, KEY_FIELD } from '@shared/foxMap'
 import type { SalePoint, Session, Stats } from '@shared/types'
 import { loadSettings, saveSettings } from './settings'
 import { safeWriteFile } from './safety'
 import { readAuth, hashPassword, verifyPassword, Throttle, type AuthFile } from './auth'
+import { EditAccess, accessCodeFor, ACCESS_MINUTES, type AccessMinutes } from './access'
 import { openSqlite } from './sql'
 import { ShipStore } from './store'
 import { ProformaSource } from './proformaSource'
@@ -17,13 +18,15 @@ import { safetyCopy, backupNow } from './backup'
 import { invoiceHtml } from './pdf/invoiceTemplate'
 import { packingHtml } from './pdf/packingTemplate'
 import { recordHtml } from './pdf/recordTemplate'
+import { proformaHtml } from './pdf/proformaTemplate'
 import { checkRecord, monthTitle, normalizeRecord, rowFromInvoice, type ShippingRecord } from '@shared/shippingRecord'
 import { packingTotals } from '@shared/packing'
 import { checkPackingList, normalizePackingList, type PackingList } from '@shared/packing'
 import { renderPdf } from './pdf/render'
+import { seedDemoFiles, seedDemoStore } from './demoSeed' // DEMO: remove with demoSeed.ts
 
 // SHIP_DATA_DIR: another data folder, for trying the app out without touching the real one.
-app.setPath('userData', process.env.SHIP_DATA_DIR || join(app.getPath('appData'), 'Shipping Management AMP'))
+app.setPath('userData', process.env.SHIP_DATA_DIR ? resolve(process.env.SHIP_DATA_DIR) : join(app.getPath('appData'), 'Shipping Management AMP'))
 
 let win: BrowserWindow | null = null
 let store: ShipStore
@@ -32,10 +35,17 @@ const throttle = new Throttle()
 let auth: AuthFile
 let loggedIn: string | null = null
 let admin = false
+let access: EditAccess
 
 const userData = () => app.getPath('userData')
 const authFile = () => join(userData(), 'auth.json')
 const settingsFile = () => join(userData(), 'settings.json')
+
+/** Changing / deleting saved documents and editing FoxPro records: the admin, or edit access opened by code. */
+function requireEdit() {
+  if (!admin && !access.active)
+    throw new Error('Edit access is needed: click "Edit access", send the request code, and type the access code you receive.')
+}
 
 function requireAdmin() {
   if (!admin) throw new Error('Only the admin can do this. Enter the admin password first.')
@@ -89,6 +99,20 @@ async function recordPdf(r: ShippingRecord) {
   return renderPdf(recordHtml(r), join(userData(), 'render'))
 }
 
+/** A proforma from the Product Management App as a PDF (its own 2-page layout). */
+async function proformaPdf(id: string) {
+  const s = await loadSettings()
+  await pma.refresh(s.pmaDbPath)
+  const pf = pma.get(id)
+  if (!pf) throw new Error('That proforma invoice is no longer in the Product Management App.')
+  // the bank block opens with the factory name, as on the planning app's printout
+  const factory = s.defaults.beneficiary.split(/\r?\n/)[0]?.trim() ?? ''
+  const bank = [factory, s.defaults.bank].filter(Boolean).join('\n')
+  const out = await renderPdf(proformaHtml(s.company, bank, pf), join(userData(), 'render'))
+  const name = `Proforma Invoice ${pf.header?.invoiceNo || 'draft'}`.replace(/[\\/:*?"<>|]+/g, '-').trim() + '.pdf'
+  return { ...out, name }
+}
+
 async function invoicePdf(ci: CommercialInvoice) {
   const s = await loadSettings()
   return renderPdf(invoiceHtml(s.company, ci), join(userData(), 'render'))
@@ -99,8 +123,10 @@ const handlers: Api = {
     return { name: 'Shipping Management AMP', version: app.getVersion(), dataFolder: userData(), sqlite: sqliteVersion() }
   },
   async session(): Promise<Session> {
-    return { user: loggedIn, admin }
+    const a = access?.status() ?? { until: null, request: null }
+    return { user: loggedIn, admin, editUntil: a.until, request: a.request, canEdit: admin || !!access?.active }
   },
+
   async login(user, password) {
     const r = throttle.attempt(
       () => typeof user === 'string' && user.trim().toLowerCase() === auth.user.toLowerCase() && verifyPassword(password, auth.appHash),
@@ -136,6 +162,15 @@ const handlers: Api = {
     await safeWriteFile(authFile(), JSON.stringify(next, null, 2))
     auth = next
     loggedIn = next.user
+  },
+
+  newAccessRequest: async () => access.newRequest(),
+  enterAccessCode: async (code) => access.enter(code),
+  endEditAccess: async () => access.end(),
+  async makeAccessCode(request, minutes) {
+    requireAdmin()
+    if (!ACCESS_MINUTES.includes(minutes as AccessMinutes)) throw new Error('Choose one of the times offered.')
+    return accessCodeFor(request, minutes as AccessMinutes)
   },
 
   getSettings: () => loadSettings(),
@@ -205,6 +240,8 @@ const handlers: Api = {
     return { warnings: r.warnings, reindexed: r.reindexed }
   },
   async foxSetDeleted(recno, expectKey, deleted) {
+    // records in the FoxPro table are never deleted from this app (only recalled, by the admin)
+    if (deleted) throw new Error('Deleting records in the FoxPro table is not allowed from this app.')
     const s = await loadSettings()
     if (!s.writeFoxPro) throw new Error('Saving to the FoxPro table is switched off (Settings → FoxPro shipping table).')
     const { path, indexes } = await foxOn()
@@ -252,6 +289,25 @@ const handlers: Api = {
     return pma.get(id)
   },
 
+  async pmaPreview(id) {
+    const r = await proformaPdf(id)
+    return { pdf: r.pdf.toString('base64'), pages: r.pages }
+  },
+  async pmaSavePdf(id) {
+    const r = await proformaPdf(id)
+    const res = await dialog.showSaveDialog(win!, { defaultPath: join(app.getPath('documents'), r.name), filters: [{ name: 'PDF', extensions: ['pdf'] }] })
+    if (res.canceled || !res.filePath) return null
+    await safeWriteFile(res.filePath, r.pdf)
+    return res.filePath
+  },
+  async pmaPrint(id) {
+    const r = await proformaPdf(id)
+    const file = join(userData(), 'print', r.name)
+    await safeWriteFile(file, r.pdf)
+    const err = await shell.openPath(file)
+    if (err) throw new Error(err)
+  },
+
   invoiceList: async (q) => store.list(q),
   knownBarcodes: async () => store.barcodes(),
   async invoiceGet(id) {
@@ -261,8 +317,10 @@ const handlers: Api = {
   async invoiceSave(input, toFoxPro) {
     checkInvoice(input)
     // a saved invoice can only be changed by the admin
-    if (input.id && store.get(input.id)) requireAdmin()
+    if (input.id && store.get(input.id)) requireEdit()
     const s = await loadSettings()
+    // updating a record that is already in the FoxPro table needs the admin (adding a new one does not)
+    if (toFoxPro && s.writeFoxPro && input.foxRecno) requireEdit()
     let ci = normalizeInvoice(input, s.defaults)
     if (!ci.invoiceNo.trim()) throw new Error('Type the commercial invoice no first.')
     const dup = store.duplicateOf(ci.invoiceNo, ci.id)
@@ -299,22 +357,13 @@ const handlers: Api = {
       return { invoice: ci, fox: `Saved in the app, but NOT in FoxPro: ${(e as Error).message}`, warnings: [] }
     }
   },
-  async invoiceDelete(id, alsoFoxPro) {
+  async invoiceDelete(id) {
     const ci = store.get(id)
     if (!ci) return 'Already deleted.'
-    let msg = ''
-    if (alsoFoxPro && ci.foxRecno) {
-      const s = await loadSettings()
-      if (!s.writeFoxPro) throw new Error('Saving to the FoxPro table is switched off, so the FoxPro record cannot be deleted from here.')
-      const { path, indexes } = await foxOn()
-      await beforeFoxWrite(path, indexes)
-      await fox.markDeleted(path, ci.foxRecno, ci.foxKey ?? ci.invoiceNo, true, todayIso())
-      store.log({ at: Date.now(), action: 'delete', target: 'foxpro', invoiceNo: ci.invoiceNo, recno: ci.foxRecno, detail: {} })
-      msg = ` FoxPro record ${ci.foxRecno} is marked deleted (it can be recalled on the FoxPro records screen).`
-    }
+    // only the app's copy: the FoxPro record (if any) is never deleted from this app
     store.delete(id)
     store.log({ at: Date.now(), action: 'delete', target: 'app', invoiceNo: ci.invoiceNo, recno: ci.foxRecno, detail: { invoice: ci } })
-    return `Deleted ${ci.invoiceNo} from the app.${msg}`
+    return `Deleted ${ci.invoiceNo} from the app.${ci.foxRecno ? ` FoxPro record ${ci.foxRecno} is kept.` : ''}`
   },
   async invoicePreview(ci) {
     checkInvoice(ci)
@@ -346,7 +395,7 @@ const handlers: Api = {
   async packingSave(input) {
     checkPackingList(input)
     const before = input.id ? store.packingGet(input.id) : null
-    if (before) requireAdmin()
+    if (before) requireEdit()
     const pl = normalizePackingList({ ...input, id: before ? input.id : null }, (await loadSettings()).defaults)
     if (!pl.invoiceNo.trim()) throw new Error('Type or pick the commercial invoice no first.')
     const dup = store.packingDuplicateOf(pl.invoiceNo, before ? pl.id : null)
@@ -396,7 +445,7 @@ const handlers: Api = {
   async recordSave(input) {
     checkRecord(input)
     const before = input.id ? store.recordGet(input.id) : null
-    if (before) requireAdmin()
+    if (before) requireEdit()
     if (!/^\d{4}-\d{2}$/.test(input.month)) throw new Error('Choose the month of the record.')
     const rec = normalizeRecord({ ...input, id: before ? input.id : null })
     const dup = store.recordForMonth(rec.month, before ? rec.id : null)
@@ -514,6 +563,7 @@ function registerIpc() {
     ipcMain.handle(name, (_e, ...args: unknown[]) => {
       if (!loggedIn && !PUBLIC_METHODS.has(name as keyof Api)) throw new Error('Log in first.')
       if (ADMIN_METHODS.has(name as keyof Api)) requireAdmin()
+      if (EDIT_METHODS.has(name as keyof Api)) requireEdit()
       return (fn as (...a: unknown[]) => unknown)(...args)
     })
   }
@@ -546,9 +596,14 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
+  const demo = process.env.SHIP_DEMO === '1' && !!process.env.SHIP_DATA_DIR // DEMO: remove with demoSeed.ts
+  if (demo) seedDemoFiles(userData())
   await loadSettings() // sets the write guard before anything else runs
   auth = readAuth(authFile())
+  access = new EditAccess(join(userData(), 'access.json'), throttle)
+  await access.load()
   store = new ShipStore(join(userData(), 'shipments.db'), openSqlite)
+  if (demo) seedDemoStore(store)
   pma = new ProformaSource(join(userData(), 'pma-copy'), openSqlite)
   registerIpc()
   createWindow()

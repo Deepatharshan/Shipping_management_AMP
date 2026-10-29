@@ -3,7 +3,8 @@ import type { AppInfo, Session } from '@shared/types'
 import type { CommercialInvoice } from '@shared/invoice'
 import type { PackingList } from '@shared/packing'
 import { Icon } from './icons'
-import { AdminProvider, ToastProvider } from './ui'
+import { AdminProvider, clock, timeLeft, ToastProvider, useOpenEditAccess } from './ui'
+import { AmpLogo } from './Logo'
 import LoginScreen from './LoginScreen'
 import Dashboard from './screens/Dashboard'
 import InvoiceEditor from './screens/InvoiceEditor'
@@ -114,14 +115,22 @@ function Shell({ info, session, reload }: { info: AppInfo | null; session: Sessi
       return !c
     })
   const allLinked = linked.fox && linked.pma
+  const openAccess = useOpenEditAccess()
+  // keep the time left fresh, and notice when edit access runs out
+  const [, tick] = useState(0)
+  useEffect(() => {
+    const t = setInterval(() => {
+      tick((n) => n + 1)
+      if (session.editUntil && Date.now() >= session.editUntil) reload()
+    }, 30_000)
+    return () => clearInterval(t)
+  }, [session.editUntil])
 
   return (
     <div className={collapsed ? 'app collapsed' : 'app'}>
       <aside className="sidebar">
         <div className="sb-brand">
-          <div className="mark">
-            <Icon name="anchor" size={18} />
-          </div>
+          <AmpLogo size={38} />
           <div className="sb-name">
             Shipping&amp;AMP
             <small>AMP Ceylon (Pvt) Ltd</small>
@@ -168,17 +177,27 @@ function Shell({ info, session, reload }: { info: AppInfo | null; session: Sessi
             <i />
             <span className="lbl">{allLinked ? 'Data linked' : 'Not linked — Settings'}</span>
           </button>
+          <button
+            className={session.canEdit ? 'sb-access on' : 'sb-access'}
+            title={session.editUntil ? `Edit access open until ${clock(session.editUntil)}` : session.admin ? 'Admin is unlocked' : 'Open edit access with a code'}
+            onClick={openAccess}
+          >
+            <Icon name={session.canEdit ? 'unlock' : 'lock'} size={14} />
+            <span className="lbl">
+              {session.editUntil ? `Edit access · ${timeLeft(session.editUntil)} left` : session.admin ? 'Admin unlocked' : 'Edit access'}
+            </span>
+          </button>
           {session.admin && (
             <button
-              className="sb-admin"
-              title="Admin is unlocked: saved documents can be changed or deleted. Click to lock."
+              className="sb-access"
+              title="Lock admin again"
               onClick={async () => {
                 await window.api.adminLogout()
                 reload()
               }}
             >
-              <Icon name="unlock" size={14} />
-              <span className="lbl">Admin unlocked · lock</span>
+              <Icon name="lock" size={14} />
+              <span className="lbl">Lock admin</span>
             </button>
           )}
           <div className="sb-user">

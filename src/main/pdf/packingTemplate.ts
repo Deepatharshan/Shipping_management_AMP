@@ -185,7 +185,11 @@ export function packingHtml(company: CompanyDetails, pl: PackingList): string {
       body.appendChild(b);
     }
   });
-  pages.forEach(function (p, i) { p.querySelector('.pgno .n').textContent = String(i + 1); });
+  pages.forEach(function (p, i) {
+    p.querySelector('.pgno .n').textContent = String(i + 1);
+    // the column titles only on pages that have item rows (not on a page of totals only)
+    if (!p.querySelector('.body .item')) { var ch = p.querySelector('.colhead'); if (ch) ch.parentNode.removeChild(ch); }
+  });
   src.parentNode.removeChild(src);
   window.__pageCount = pages.length;
   window.__paginated = true;

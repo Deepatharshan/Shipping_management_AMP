@@ -17,6 +17,14 @@ export interface Api {
   adminLogout(): Promise<void>
   /** admin only; blank fields are left unchanged */
   changeLogins(p: { user?: string; password?: string; adminPassword?: string }): Promise<void>
+  /** A new request code for edit access; send it to the developer. */
+  newAccessRequest(): Promise<{ code: string; createdAt: number }>
+  /** Type the access code received for the request code: opens edit access for its time. */
+  enterAccessCode(code: string): Promise<{ ok: boolean; message: string; until: number | null }>
+  /** Close edit access now. */
+  endEditAccess(): Promise<void>
+  /** Admin only: the access code for a request code and a time in minutes. */
+  makeAccessCode(request: string, minutes: number): Promise<string>
 
   getSettings(): Promise<Settings>
   saveSettings(s: Settings): Promise<Settings>
@@ -40,13 +48,18 @@ export interface Api {
   pmaList(query: string): Promise<ProformaSummary[]>
   pmaFind(invoiceNo: string): Promise<ProformaSummary[]>
   pmaGet(id: string): Promise<PmaProforma | null>
+  /** a proforma as a PDF in the Product Management App's layout */
+  pmaPreview(id: string): Promise<{ pdf: string; pages: number }>
+  pmaSavePdf(id: string): Promise<string | null>
+  pmaPrint(id: string): Promise<void>
 
   invoiceList(query: string): Promise<InvoiceSummary[]>
   /** barcodes from earlier invoices, by "your item no|our item no" */
   knownBarcodes(): Promise<Record<string, string>>
   invoiceGet(id: string): Promise<CommercialInvoice | null>
   invoiceSave(ci: CommercialInvoice, toFoxPro: boolean): Promise<SaveResult>
-  invoiceDelete(id: string, alsoFoxPro: boolean): Promise<string>
+  /** deletes the invoice from the app only; its FoxPro record is never deleted */
+  invoiceDelete(id: string): Promise<string>
   invoicePreview(ci: CommercialInvoice): Promise<{ pdf: string; pages: number }>
   invoiceSavePdf(ci: CommercialInvoice): Promise<string | null>
   invoicePrint(ci: CommercialInvoice): Promise<void>
@@ -83,10 +96,10 @@ export interface Api {
 }
 
 export const API_METHODS: (keyof Api)[] = [
-  'appInfo', 'session', 'login', 'logout', 'adminLogin', 'adminLogout', 'changeLogins',
+  'appInfo', 'session', 'login', 'logout', 'adminLogin', 'adminLogout', 'changeLogins', 'newAccessRequest', 'enterAccessCode', 'endEditAccess', 'makeAccessCode',
   'getSettings', 'saveSettings', 'pickFile', 'pickFolder', 'detectPma',
   'foxStatus', 'foxList', 'foxFind', 'foxRecord', 'foxRecordValues', 'foxFieldInfo', 'foxUpdateFields', 'foxSetDeleted', 'foxOpenAsInvoice', 'foxRebuildIndexes',
-  'pmaStatus', 'pmaList', 'pmaFind', 'pmaGet',
+  'pmaStatus', 'pmaList', 'pmaFind', 'pmaGet', 'pmaPreview', 'pmaSavePdf', 'pmaPrint',
   'invoiceList', 'knownBarcodes', 'invoiceGet', 'invoiceSave', 'invoiceDelete', 'invoicePreview', 'invoiceSavePdf', 'invoicePrint', 'openPath',
   'packingList', 'packingGet', 'packingSave', 'packingDelete', 'packingPreview', 'packingSavePdf', 'packingPrint',
   'recordList', 'recordGet', 'recordForMonth', 'recordSave', 'recordDelete', 'recordRowFor', 'recordPreview', 'recordSavePdf', 'recordPrint',
@@ -99,4 +112,10 @@ export const PUBLIC_METHODS = new Set<keyof Api>(['appInfo', 'session', 'login']
  * Calls that need the admin password. Saving over an invoice or packing list that is already saved
  * also needs it (checked in the handler, since saving a new one does not).
  */
-export const ADMIN_METHODS = new Set<keyof Api>(['saveSettings', 'changeLogins', 'foxRebuildIndexes', 'backupNow', 'invoiceDelete', 'packingDelete', 'recordDelete', 'changes'])
+export const ADMIN_METHODS = new Set<keyof Api>(['saveSettings', 'changeLogins', 'foxRebuildIndexes', 'backupNow', 'changes', 'makeAccessCode'])
+/**
+ * Calls that need edit access: the admin, or an access code opened for a set time. Saving over a saved
+ * invoice, packing list or shipping record (or a FoxPro record) is checked in the handler too. FoxPro
+ * records are never deleted from the app (foxSetDeleted only recalls).
+ */
+export const EDIT_METHODS = new Set<keyof Api>(['invoiceDelete', 'packingDelete', 'recordDelete', 'foxUpdateFields', 'foxSetDeleted'])

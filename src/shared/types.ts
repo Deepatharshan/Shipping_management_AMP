@@ -51,6 +51,12 @@ export interface AppInfo {
 export interface Session {
   user: string | null
   admin: boolean
+  /** edit access by code: open until this time (ms), or null */
+  editUntil: number | null
+  /** a request code waiting for its access code */
+  request: { code: string; createdAt: number } | null
+  /** changing / deleting saved documents and editing FoxPro records is allowed now (admin, or edit access open) */
+  canEdit: boolean
 }
 
 export interface LoginResult {
