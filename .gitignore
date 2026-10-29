@@ -20,3 +20,9 @@ real-data/
 # app
 *.shp-lock
 *.shp-new
+
+# sample data for npm run dev:demo (never the real data)
+demo-data/
+
+# the secret behind the edit-access codes (keep a safe copy outside git)
+src/main/accessKey.ts

@@ -2,23 +2,20 @@ import { useEffect, useState } from 'react'
 import type { InvoiceSummary } from '@shared/types'
 import type { OpenRequest, Screen } from '../App'
 import { Icon } from '../icons'
-import { errorText, fmtDate, fmtMoney, SearchBox, useToast } from '../ui'
+import { errorText, fmtDate, fmtMoney, SearchBox, useAdmin, useToast } from '../ui'
 import { DeleteInvoice } from './InvoiceEditor'
 
 export default function Shipments({ go }: { go: (s: Screen, r?: OpenRequest) => void }) {
   const toast = useToast()
+  const ensureAdmin = useAdmin()
   const [q, setQ] = useState('')
   const [rows, setRows] = useState<InvoiceSummary[]>([])
   const [del, setDel] = useState<InvoiceSummary | null>(null)
-  const [writeOn, setWriteOn] = useState(false)
   const load = () => window.api.invoiceList(q).then(setRows).catch((e) => toast(errorText(e), 'error'))
   useEffect(() => {
     const t = setTimeout(load, 150)
     return () => clearTimeout(t)
   }, [q])
-  useEffect(() => {
-    window.api.getSettings().then((s) => setWriteOn(s.writeFoxPro))
-  }, [])
   const open = async (id: string) => {
     const ci = await window.api.invoiceGet(id)
     if (ci) go('invoice', { kind: 'invoice', invoice: ci })
@@ -96,7 +93,10 @@ export default function Shipments({ go }: { go: (s: Screen, r?: OpenRequest) => 
                         <Icon name="download" />
                       </button>
                     )}
-                    <button className="roundbtn danger" title="Delete" onClick={() => setDel(r)}>
+                    <button className="roundbtn" title="Packing / weight list" onClick={() => go('packing', { kind: 'packingFromInvoice', invoiceId: r.id })}>
+                      <Icon name="box" />
+                    </button>
+                    <button className="roundbtn danger" title="Delete (admin)" onClick={async () => (await ensureAdmin(`delete the invoice ${r.invoiceNo}`)) && setDel(r)}>
                       <Icon name="trash" />
                     </button>
                   </td>
@@ -107,7 +107,7 @@ export default function Shipments({ go }: { go: (s: Screen, r?: OpenRequest) => 
           {!rows.length && <div className="empty">{q ? 'Nothing matches the search.' : 'No invoices yet.'}</div>}
         </div>
       </div>
-      {del && <DeleteInvoice ci={del} writeOn={writeOn} onClose={() => setDel(null)} onDone={() => (setDel(null), load())} />}
+      {del && <DeleteInvoice ci={del} onClose={() => setDel(null)} onDone={() => (setDel(null), load())} />}
     </>
   )
 }

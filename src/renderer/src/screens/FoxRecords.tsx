@@ -3,11 +3,11 @@ import type { FoxPage, FoxRecord, FoxRow, FoxStatus } from '@shared/types'
 import { FIELD_LABELS, KEY_FIELD, WRITTEN_FIELDS } from '@shared/foxMap'
 import type { OpenRequest, Screen } from '../App'
 import { Icon } from '../icons'
-import { ConfirmDialog, Drawer, errorText, fmtDate, fmtMoney, SearchBox, Switch, useToast } from '../ui'
+import { ConfirmDialog, Drawer, errorText, fmtDate, fmtMoney, SearchBox, Switch, useAdmin, useToast } from '../ui'
 
 const PAGE = 40
 
-/** Browse, edit, delete and recall records of the FoxPro shipping table (the old database). */
+/** Browse and edit records of the FoxPro shipping table (the old database). Editing needs the admin; records are never deleted. */
 export default function FoxRecords({ go }: { go: (s: Screen, r?: OpenRequest) => void }) {
   const toast = useToast()
   const [q, setQ] = useState('')
@@ -149,10 +149,11 @@ export default function FoxRecords({ go }: { go: (s: Screen, r?: OpenRequest) =>
 
 function RecordDrawer({ recno, writeOn, onClose, onChanged, onOpenInvoice }: { recno: number; writeOn: boolean; onClose: () => void; onChanged: () => void; onOpenInvoice: () => void }) {
   const toast = useToast()
+  const ensureAdmin = useAdmin()
   const [rec, setRec] = useState<FoxRecord | null>(null)
   const [edits, setEdits] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
-  const [confirm, setConfirm] = useState<'delete' | 'recall' | null>(null)
+  const [confirm, setConfirm] = useState<'recall' | null>(null)
   const [allFields, setAllFields] = useState(false)
 
   const load = () => window.api.foxRecord(recno).then((r) => (setRec(r), setEdits({}))).catch((e) => toast(errorText(e), 'error'))
@@ -167,6 +168,7 @@ function RecordDrawer({ recno, writeOn, onClose, onChanged, onOpenInvoice }: { r
   const shown = rec.fields.filter((f) => allFields || WRITTEN_FIELDS.includes(f.name) || f.value.trim())
 
   const save = async () => {
+    if (!(await ensureAdmin(`change FoxPro record ${recno}`))) return
     setBusy(true)
     try {
       const values: Record<string, string> = {}
@@ -196,28 +198,28 @@ function RecordDrawer({ recno, writeOn, onClose, onChanged, onOpenInvoice }: { r
           <button className="btn" onClick={onOpenInvoice} disabled={rec.deleted}>
             <Icon name="file" /> Open as invoice
           </button>
-          {writeOn &&
-            (rec.deleted ? (
-              <button className="btn" onClick={() => setConfirm('recall')}>
-                <Icon name="undo" /> Recall
-              </button>
-            ) : (
-              <button className="btn danger" onClick={() => setConfirm('delete')}>
-                <Icon name="trash" /> Delete
-              </button>
-            ))}
+          {writeOn && rec.deleted && (
+            <button className="btn" onClick={async () => (await ensureAdmin(`recall FoxPro record ${recno}`)) && setConfirm('recall')}>
+              <Icon name="undo" /> Recall
+            </button>
+          )}
           {writeOn && (
-            <button className="btn dark" disabled={!changed.length || busy || rec.deleted} onClick={save}>
-              <Icon name="check" /> Save {changed.length ? `${changed.length} change${changed.length > 1 ? 's' : ''}` : ''}
+            <button className="btn dark" disabled={!changed.length || busy || rec.deleted} onClick={save} title="Needs edit access">
+              <Icon name="lock" /> Save {changed.length ? `${changed.length} change${changed.length > 1 ? 's' : ''}` : ''}
             </button>
           )}
         </>
       }
     >
-      {!writeOn && (
+      {!writeOn ? (
         <div className="notice" style={{ marginBottom: 12 }}>
           <Icon name="lock" />
           <span className="grow">Read-only: saving to the FoxPro table is switched off in Settings.</span>
+        </div>
+      ) : (
+        <div className="notice" style={{ marginBottom: 12 }}>
+          <Icon name="shield" />
+          <span className="grow">Saving changes to this record needs edit access (an access code, or the admin). Records in the FoxPro table cannot be deleted from this app.</span>
         </div>
       )}
       <div className="row" style={{ marginBottom: 12 }}>
@@ -244,22 +246,16 @@ function RecordDrawer({ recno, writeOn, onClose, onChanged, onOpenInvoice }: { r
           )
         })}
       </div>
-      {confirm && (
+      {confirm === 'recall' && (
         <ConfirmDialog
-          title={confirm === 'delete' ? `Delete record ${recno}?` : `Recall record ${recno}?`}
-          text={
-            confirm === 'delete'
-              ? 'The record is marked deleted in the FoxPro table, exactly like FoxPro’s DELETE. It stays in the file (until FoxPro packs the table) and can be recalled here.'
-              : 'The deleted mark is removed, like FoxPro’s RECALL.'
-          }
-          confirmWord={confirm === 'delete' ? key.trim() || String(recno) : undefined}
-          confirmLabel={confirm === 'delete' ? 'Delete in FoxPro' : 'Recall'}
-          danger={confirm === 'delete'}
+          title={`Recall record ${recno}?`}
+          text="The deleted mark is removed, like FoxPro’s RECALL."
+          confirmLabel="Recall"
           onClose={() => setConfirm(null)}
           onConfirm={async () => {
             try {
-              await window.api.foxSetDeleted(recno, key, confirm === 'delete')
-              toast(confirm === 'delete' ? `Record ${recno} marked deleted.` : `Record ${recno} recalled.`)
+              await window.api.foxSetDeleted(recno, key, false)
+              toast(`Record ${recno} recalled.`)
               setConfirm(null)
               await load()
               onChanged()

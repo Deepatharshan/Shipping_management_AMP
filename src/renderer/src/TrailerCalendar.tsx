@@ -8,7 +8,7 @@ type Mark = { id: string; invoiceNo: string; kind: 'ETD' | 'ETA' }
 const iso = (y: number, m: number, d: number) => `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
 
 /** A month calendar drawn inside a box trailer. Each day shows the shipments that sail (ETD) or arrive (ETA) on it. */
-export function TrailerCalendar({ rows, onOpen }: { rows: InvoiceSummary[]; onOpen: (id: string) => void }) {
+export function TrailerCalendar({ rows, onOpen, compact }: { rows: InvoiceSummary[]; onOpen: (id: string) => void; compact?: boolean }) {
   const today = todayIso()
   const [month, setMonth] = useState(() => {
     const d = new Date()
@@ -54,7 +54,7 @@ export function TrailerCalendar({ rows, onOpen }: { rows: InvoiceSummary[]; onOp
   const selLabel = new Date(sel + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })
 
   return (
-    <div className="tcal">
+    <div className={compact ? 'tcal compact' : 'tcal'}>
       <div className="tcal-head">
         <div>
           <div className="eyebrow">Shipping calendar</div>
@@ -128,8 +128,8 @@ export function TrailerCalendar({ rows, onOpen }: { rows: InvoiceSummary[]; onOp
       </div>
 
       <div className="tcal-day">
-        <span className="muted">{selLabel}</span>
-        {selMarks.length === 0 && <span className="muted">· no sailings or arrivals</span>}
+        <span className="day">{selLabel}</span>
+        {selMarks.length === 0 && <span className="muted">No sailings or arrivals</span>}
         {selMarks.map((m, i) => (
           <button key={i} className="chipbtn" onClick={() => onOpen(m.id)}>
             <i className={m.kind === 'ETD' ? 'dot etd' : 'dot eta'} /> {m.kind} · {m.invoiceNo}
