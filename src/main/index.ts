@@ -1,17 +1,18 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import type { Api } from '@shared/ipc'
 import { ADMIN_METHODS, EDIT_METHODS, PUBLIC_METHODS } from '@shared/ipc'
 import { checkInvoice, normalizeInvoice, todayIso, type CommercialInvoice } from '@shared/invoice'
 import { invoiceFromFox, KEY_FIELD } from '@shared/foxMap'
-import type { SalePoint, Session, Stats } from '@shared/types'
+import type { DbFolderCheck, DbStatus, SalePoint, Session, Settings, Stats } from '@shared/types'
 import { loadSettings, saveSettings } from './settings'
 import { safeWriteFile } from './safety'
 import { readAuth, hashPassword, verifyPassword, Throttle, type AuthFile } from './auth'
 import { EditAccess, accessCodeFor, ACCESS_MINUTES, type AccessMinutes } from './access'
 import { openSqlite } from './sql'
-import { ShipStore } from './store'
+import { isNetworkPath, ShipStore } from './store'
 import { ProformaSource } from './proformaSource'
 import * as fox from './foxShipping'
 import { safetyCopy, backupNow } from './backup'
@@ -23,6 +24,7 @@ import { checkRecord, monthTitle, normalizeRecord, rowFromInvoice, type Shipping
 import { packingTotals } from '@shared/packing'
 import { checkPackingList, normalizePackingList, type PackingList } from '@shared/packing'
 import { renderPdf } from './pdf/render'
+import { invoiceXlsx, packingXlsx, proformaXlsx, recordXlsx } from './excel/reports'
 import { seedDemoFiles, seedDemoStore } from './demoSeed' // DEMO: remove with demoSeed.ts
 
 // SHIP_DATA_DIR: another data folder, for trying the app out without touching the real one.
@@ -49,6 +51,36 @@ function requireEdit() {
 
 function requireAdmin() {
   if (!admin) throw new Error('Only the admin can do this. Enter the admin password first.')
+}
+
+const DB_NAME = 'shipments.db'
+/** The folder of the app's database: the one chosen in Settings, else the app data folder. */
+const dbFolderOf = (s: Settings) => (s.dataFolder?.trim() ? resolve(s.dataFolder.trim()) : userData())
+const samePath = (a: string, b: string) => resolve(a).toLowerCase() === resolve(b).toLowerCase()
+
+/** Count what a database file holds without changing it (null when it cannot be read). */
+function peekInvoices(file: string): number | null {
+  try {
+    const db = openSqlite(file)
+    try {
+      return (db.prepare('SELECT COUNT(*) AS n FROM invoices').get() as { n: number }).n
+    } finally {
+      db.close()
+    }
+  } catch {
+    return null
+  }
+}
+
+/** Can the app create and remove a file in this folder? */
+function checkWritable(folder: string) {
+  const probe = join(folder, `.shipping-amp-write-test-${Date.now()}`)
+  try {
+    writeFileSync(probe, 'test')
+    unlinkSync(probe)
+  } catch (e) {
+    throw new Error(`The app cannot write in ${folder}: ${(e as Error).message}`)
+  }
 }
 
 function sqliteVersion(): string {
@@ -99,8 +131,8 @@ async function recordPdf(r: ShippingRecord) {
   return renderPdf(recordHtml(r), join(userData(), 'render'))
 }
 
-/** A proforma from the Product Management App as a PDF (its own 2-page layout). */
-async function proformaPdf(id: string) {
+/** A proforma from the Product Management App, its bank block and file name. */
+async function proformaFor(id: string) {
   const s = await loadSettings()
   await pma.refresh(s.pmaDbPath)
   const pf = pma.get(id)
@@ -108,6 +140,21 @@ async function proformaPdf(id: string) {
   // the bank block opens with the factory name, as on the planning app's printout
   const factory = s.defaults.beneficiary.split(/\r?\n/)[0]?.trim() ?? ''
   const bank = [factory, s.defaults.bank].filter(Boolean).join('\n')
+  return { s, pf, bank }
+}
+
+/** Ask where to save an Excel workbook (Documents by default) and write it. */
+async function saveXlsx(name: string, make: () => Promise<Buffer>): Promise<string | null> {
+  const file = `${name}`.replace(/[\\/:*?"<>|]+/g, '-').trim() + '.xlsx'
+  const res = await dialog.showSaveDialog(win!, { defaultPath: join(app.getPath('documents'), file), filters: [{ name: 'Excel workbook', extensions: ['xlsx'] }] })
+  if (res.canceled || !res.filePath) return null
+  await safeWriteFile(res.filePath, await make())
+  return res.filePath
+}
+
+/** A proforma from the Product Management App as a PDF (its own 2-page layout). */
+async function proformaPdf(id: string) {
+  const { s, pf, bank } = await proformaFor(id)
   const out = await renderPdf(proformaHtml(s.company, bank, pf), join(userData(), 'render'))
   const name = `Proforma Invoice ${pf.header?.invoiceNo || 'draft'}`.replace(/[\\/:*?"<>|]+/g, '-').trim() + '.pdf'
   return { ...out, name }
@@ -175,7 +222,8 @@ const handlers: Api = {
 
   getSettings: () => loadSettings(),
   async saveSettings(s) {
-    const saved = await saveSettings(s)
+    // the database folder is changed only by dbSetFolder (which moves the file), never by this form
+    const saved = await saveSettings({ ...s, dataFolder: (await loadSettings()).dataFolder })
     fox.forgetCache()
     return saved
   },
@@ -293,6 +341,10 @@ const handlers: Api = {
     const r = await proformaPdf(id)
     return { pdf: r.pdf.toString('base64'), pages: r.pages }
   },
+  async pmaSaveXlsx(id) {
+    const { s, pf, bank } = await proformaFor(id)
+    return saveXlsx(`Proforma Invoice ${pf.header?.invoiceNo || 'draft'}`, () => proformaXlsx(s.company, bank, pf))
+  },
   async pmaSavePdf(id) {
     const r = await proformaPdf(id)
     const res = await dialog.showSaveDialog(win!, { defaultPath: join(app.getPath('documents'), r.name), filters: [{ name: 'PDF', extensions: ['pdf'] }] })
@@ -370,6 +422,11 @@ const handlers: Api = {
     const r = await invoicePdf(ci)
     return { pdf: r.pdf.toString('base64'), pages: r.pages }
   },
+  async invoiceSaveXlsx(ci) {
+    checkInvoice(ci)
+    const s = await loadSettings()
+    return saveXlsx(`Commercial Invoice ${ci.invoiceNo || 'draft'}`, () => invoiceXlsx(s.company, normalizeInvoice(ci, s.defaults)))
+  },
   async invoiceSavePdf(ci) {
     checkInvoice(ci)
     const res = await dialog.showSaveDialog(win!, { defaultPath: join(app.getPath('documents'), pdfName(ci)), filters: [{ name: 'PDF', extensions: ['pdf'] }] })
@@ -415,6 +472,11 @@ const handlers: Api = {
     checkPackingList(pl)
     const r = await packingPdf(pl)
     return { pdf: r.pdf.toString('base64'), pages: r.pages }
+  },
+  async packingSaveXlsx(pl) {
+    checkPackingList(pl)
+    const s = await loadSettings()
+    return saveXlsx(`Packing List ${pl.invoiceNo || 'draft'}`, () => packingXlsx(s.company, normalizePackingList(pl, s.defaults)))
   },
   async packingSavePdf(pl) {
     checkPackingList(pl)
@@ -497,6 +559,10 @@ const handlers: Api = {
     const out = await recordPdf(r)
     return { pdf: out.pdf.toString('base64'), pages: out.pages }
   },
+  async recordSaveXlsx(r) {
+    checkRecord(r)
+    return saveXlsx(`Shipping Record ${monthTitle(r.month)}`, () => recordXlsx(normalizeRecord(r)))
+  },
   async recordSavePdf(r) {
     checkRecord(r)
     const res = await dialog.showSaveDialog(win!, { defaultPath: join(app.getPath('documents'), recordPdfName(r)), filters: [{ name: 'PDF', extensions: ['pdf'] }] })
@@ -551,6 +617,83 @@ const handlers: Api = {
     const s = await loadSettings()
     return backupNow({ target: s.backupPath, shippingPath: s.shippingPath, indexes: s.shippingIndexes, storeBackup: (d) => store.backupTo(d), settingsFile: settingsFile() })
   },
+  async dbStatus(): Promise<DbStatus> {
+    const folder = resolve(store.file, '..')
+    let size = 0
+    try {
+      size = statSync(store.file).size
+    } catch {
+      /* not written yet */
+    }
+    return {
+      file: store.file, folder, defaultFolder: userData(), isDefault: samePath(folder, userData()), network: isNetworkPath(store.file), size,
+      ...store.counts()
+    }
+  },
+  async dbCheckFolder(folder): Promise<DbFolderCheck> {
+    const target = resolve(String(folder ?? ''))
+    if (!existsSync(target) || !statSync(target).isDirectory()) throw new Error(`Cannot find the folder ${target}.`)
+    const file = join(target, DB_NAME)
+    const hasDb = existsSync(file)
+    return { folder: target, sameAsNow: samePath(target, resolve(store.file, '..')), hasDb, invoices: hasDb ? peekInvoices(file) : null, network: isNetworkPath(target) }
+  },
+  async dbSetFolder(folder, mode) {
+    const target = resolve(String(folder ?? ''))
+    const current = store.file
+    if (samePath(target, resolve(current, '..'))) return 'The app already uses the database in this folder.'
+    if (!existsSync(target) || !statSync(target).isDirectory()) throw new Error(`Cannot find the folder ${target}.`)
+    checkWritable(target)
+    const file = join(target, DB_NAME)
+    const before = store.counts()
+    if (mode === 'move') {
+      if (existsSync(file)) throw new Error('There is already an app database in that folder. Choose "Use the database there", or pick an empty folder.')
+      store.backupTo(file) // a consistent copy, made by SQLite itself
+      // check the copy before switching to it
+      let copy: ShipStore | null = null
+      try {
+        copy = new ShipStore(file, openSqlite)
+        const after = copy.counts()
+        if (after.invoices !== before.invoices || after.packingLists !== before.packingLists || after.records !== before.records)
+          throw new Error('The copy in the new folder does not hold the same number of documents.')
+      } catch (e) {
+        copy?.close()
+        try {
+          unlinkSync(file)
+        } catch {
+          /* leave it */
+        }
+        throw new Error(`The database was not moved: ${(e as Error).message}`)
+      }
+      store.close()
+      store = copy
+    } else {
+      if (!existsSync(file)) throw new Error('There is no app database in that folder.')
+      const next = new ShipStore(file, openSqlite) // refuses a database made by a newer version
+      store.close()
+      store = next
+    }
+    const s = await loadSettings()
+    await saveSettings({ ...s, dataFolder: samePath(target, userData()) ? '' : target })
+    // the old file stays as a backup, renamed so it is never taken for the live database
+    let kept = ''
+    if (mode === 'move') {
+      const stamp = new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '')
+      const bak = `${current}.moved-${stamp}.bak`
+      try {
+        renameSync(current, bak)
+        kept = ` The old file is kept as ${bak}.`
+      } catch {
+        kept = ` The old file is still at ${current}; it is no longer used.`
+      }
+    }
+    const now = store.counts()
+    store.log({ at: Date.now(), action: 'update', target: 'app', invoiceNo: 'App database', recno: null, detail: { from: current, to: store.file, mode } })
+    return `The app now uses ${store.file} (${now.invoices} invoices, ${now.packingLists} packing lists, ${now.records} shipping records).${kept}`
+  },
+  async dbOpenFolder() {
+    const err = await shell.openPath(resolve(store.file, '..'))
+    if (err) throw new Error(err)
+  },
   async openGuide() {
     const dir = app.isPackaged ? join(process.resourcesPath, 'guide') : join(app.getAppPath(), 'docs', 'guide')
     const err = await shell.openPath(join(dir, 'User-Guide.html'))
@@ -595,6 +738,38 @@ function createWindow() {
   else win.loadFile(join(__dirname, '../renderer/index.html'))
 }
 
+/** The database in the chosen folder; when that folder cannot be reached, ask instead of starting an empty one. */
+function openDatabase(s: Settings): ShipStore {
+  for (;;) {
+    const folder = dbFolderOf(s)
+    if (samePath(folder, userData()) || existsSync(folder)) {
+      try {
+        return new ShipStore(join(folder, DB_NAME), openSqlite)
+      } catch (e) {
+        if (samePath(folder, userData())) throw e
+      }
+    }
+    const choice = dialog.showMessageBoxSync({
+      type: 'warning',
+      title: 'Shipping Management AMP',
+      message: 'The app database folder cannot be reached.',
+      detail: `${folder}\n\nIf it is on another PC or a network drive, check that it is on and connected, then click Try again.`,
+      buttons: ['Try again', 'Use the app data folder instead', 'Quit'],
+      defaultId: 0,
+      cancelId: 2,
+      noLink: true
+    })
+    if (choice === 2) {
+      app.exit(0)
+      throw new Error('quit')
+    }
+    if (choice === 1) {
+      s = { ...s, dataFolder: '' }
+      void saveSettings(s)
+    }
+  }
+}
+
 app.whenReady().then(async () => {
   const demo = process.env.SHIP_DEMO === '1' && !!process.env.SHIP_DATA_DIR // DEMO: remove with demoSeed.ts
   if (demo) seedDemoFiles(userData())
@@ -602,7 +777,7 @@ app.whenReady().then(async () => {
   auth = readAuth(authFile())
   access = new EditAccess(join(userData(), 'access.json'), throttle)
   await access.load()
-  store = new ShipStore(join(userData(), 'shipments.db'), openSqlite)
+  store = openDatabase(await loadSettings())
   if (demo) seedDemoStore(store)
   pma = new ProformaSource(join(userData(), 'pma-copy'), openSqlite)
   registerIpc()

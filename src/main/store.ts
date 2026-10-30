@@ -27,7 +27,8 @@ export class ShipStore {
   constructor(readonly file: string, openDb: OpenDb) {
     mkdirSync(dirname(file), { recursive: true })
     this.db = openDb(file)
-    this.db.exec('PRAGMA journal_mode = WAL')
+    // WAL is faster but does not work over a network share; there the classic journal is used
+    this.db.exec(isNetworkPath(file) ? 'PRAGMA journal_mode = DELETE' : 'PRAGMA journal_mode = WAL')
     const v = userVersion(this.db)
     if (v > SCHEMA_VERSION) throw new Error('The shipments database was made by a newer version of the app. Please update the app.')
     this.db.exec(`
@@ -309,11 +310,20 @@ export class ShipStore {
     this.db.prepare('DELETE FROM shipping_records WHERE id = ?').run(id)
   }
 
+  /** How many documents of each kind are saved. */
+  counts(): { invoices: number; packingLists: number; records: number } {
+    const n = (t: string) => (this.db.prepare(`SELECT COUNT(*) AS n FROM ${t}`).get() as { n: number }).n
+    return { invoices: n('invoices'), packingLists: n('packing_lists'), records: n('shipping_records') }
+  }
+
   /** A consistent copy of the database for a backup (VACUUM INTO works on both SQLite drivers). */
   backupTo(dest: string) {
     this.db.prepare('VACUUM INTO ?').run(dest)
   }
 }
+
+/** \\server\share\… or //server/share/… */
+export const isNetworkPath = (p: string) => /^(\\\\|\/\/)/.test(p)
 
 export const barcodeKey = (yourItemNo: string, ourItem: string) => `${yourItemNo.trim().toUpperCase()}|${ourItem.trim().toUpperCase()}`
 

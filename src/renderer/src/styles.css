@@ -609,3 +609,10 @@ table.pltable .calc { display: block; font-size: 10px; color: var(--muted); text
 .lf-submit svg { width: 16px; height: 16px; }
 .loginform .credit { text-align: center; color: var(--muted); font-size: 11px; margin-top: auto; padding-top: 18px; }
 @media (max-width: 760px) { .loginshell { grid-template-columns: 1fr; } .loginbrand { display: none; } }
+
+/* ---------- settings: app database ---------- */
+.dbpath { display: flex; align-items: center; gap: 8px; background: var(--panel-2); border-radius: 12px; padding: 10px 12px; }
+.dbpath svg { color: var(--muted); }
+.dbpath code { background: none; padding: 0; font-size: 12.5px; color: var(--text); }
+.dbstats { display: flex; gap: 22px; flex-wrap: wrap; margin-top: 10px; font-size: 12.5px; color: var(--muted); }
+.dbstats b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }

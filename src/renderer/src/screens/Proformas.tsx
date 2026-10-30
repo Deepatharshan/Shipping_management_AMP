@@ -37,6 +37,11 @@ export default function Proformas({ go }: { go: (s: Screen, r?: OpenRequest) => 
       const f = await window.api.pmaSavePdf(id)
       if (f) toast(`PDF saved: ${f}`)
     })
+  const saveXlsx = (id: string) =>
+    run(id, async () => {
+      const f = await window.api.pmaSaveXlsx(id)
+      if (f) toast(`Excel file saved: ${f}`)
+    })
   const print = (id: string) => run(id, () => window.api.pmaPrint(id))
 
   const load = () =>
@@ -122,6 +127,9 @@ export default function Proformas({ go }: { go: (s: Screen, r?: OpenRequest) => 
                     <button className="roundbtn" title="Download as PDF" disabled={busy === p.id} onClick={() => download(p.id)}>
                       <Icon name="download" />
                     </button>
+                    <button className="roundbtn" title="Save as an Excel workbook" disabled={busy === p.id} onClick={() => saveXlsx(p.id)}>
+                      <Icon name="grid" />
+                    </button>
                     <button className="roundbtn" title="Print" disabled={busy === p.id} onClick={() => print(p.id)}>
                       <Icon name="printer" />
                     </button>
@@ -149,6 +157,9 @@ export default function Proformas({ go }: { go: (s: Screen, r?: OpenRequest) => 
             <>
               <button className="btn" onClick={() => download(preview.id)}>
                 <Icon name="download" /> Download PDF
+              </button>
+              <button className="btn" onClick={() => saveXlsx(preview.id)}>
+                <Icon name="grid" /> Excel
               </button>
               <button className="btn dark" onClick={() => print(preview.id)}>
                 <Icon name="printer" /> Print

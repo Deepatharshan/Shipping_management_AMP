@@ -5,7 +5,7 @@ import type { PmaProforma, ProformaSummary } from './proforma'
 import type { PackingList, PackingSummary } from './packing'
 import type { RecordRow, RecordSummary, ShippingRecord } from './shippingRecord'
 import type {
-  AppInfo, ChangeEntry, SalePoint, FoxPage, FoxRecord, FoxRow, FoxStatus, InvoiceSummary, LoginResult, PmaStatus, SaveResult, Session, Settings, Stats
+  AppInfo, ChangeEntry, DbFolderCheck, DbStatus, SalePoint, FoxPage, FoxRecord, FoxRow, FoxStatus, InvoiceSummary, LoginResult, PmaStatus, SaveResult, Session, Settings, Stats
 } from './types'
 
 export interface Api {
@@ -52,6 +52,8 @@ export interface Api {
   pmaPreview(id: string): Promise<{ pdf: string; pages: number }>
   pmaSavePdf(id: string): Promise<string | null>
   pmaPrint(id: string): Promise<void>
+  /** the proforma as an Excel workbook (Save dialog) */
+  pmaSaveXlsx(id: string): Promise<string | null>
 
   invoiceList(query: string): Promise<InvoiceSummary[]>
   /** barcodes from earlier invoices, by "your item no|our item no" */
@@ -63,6 +65,8 @@ export interface Api {
   invoicePreview(ci: CommercialInvoice): Promise<{ pdf: string; pages: number }>
   invoiceSavePdf(ci: CommercialInvoice): Promise<string | null>
   invoicePrint(ci: CommercialInvoice): Promise<void>
+  /** the report as an Excel workbook (Save dialog); null when cancelled */
+  invoiceSaveXlsx(ci: CommercialInvoice): Promise<string | null>
   openPath(path: string): Promise<void>
 
   packingList(query: string): Promise<PackingSummary[]>
@@ -73,6 +77,7 @@ export interface Api {
   packingPreview(pl: PackingList): Promise<{ pdf: string; pages: number }>
   packingSavePdf(pl: PackingList): Promise<string | null>
   packingPrint(pl: PackingList): Promise<void>
+  packingSaveXlsx(pl: PackingList): Promise<string | null>
 
   recordList(): Promise<RecordSummary[]>
   recordGet(id: string): Promise<ShippingRecord | null>
@@ -86,12 +91,20 @@ export interface Api {
   recordPreview(r: ShippingRecord): Promise<{ pdf: string; pages: number }>
   recordSavePdf(r: ShippingRecord): Promise<string | null>
   recordPrint(r: ShippingRecord): Promise<void>
+  recordSaveXlsx(r: ShippingRecord): Promise<string | null>
 
   stats(): Promise<Stats>
   /** every invoice date + amount: the FoxPro table plus app invoices not yet in it */
   salesSeries(): Promise<SalePoint[]>
   changes(): Promise<ChangeEntry[]>
   backupNow(): Promise<string>
+  /** where the app's database is and what it holds */
+  dbStatus(): Promise<DbStatus>
+  /** what is in a folder picked for the database */
+  dbCheckFolder(folder: string): Promise<DbFolderCheck>
+  /** admin: move the database to a folder ('move'), or use the database already there ('use') */
+  dbSetFolder(folder: string, mode: 'move' | 'use'): Promise<string>
+  dbOpenFolder(): Promise<void>
   openGuide(): Promise<void>
 }
 
@@ -99,11 +112,11 @@ export const API_METHODS: (keyof Api)[] = [
   'appInfo', 'session', 'login', 'logout', 'adminLogin', 'adminLogout', 'changeLogins', 'newAccessRequest', 'enterAccessCode', 'endEditAccess', 'makeAccessCode',
   'getSettings', 'saveSettings', 'pickFile', 'pickFolder', 'detectPma',
   'foxStatus', 'foxList', 'foxFind', 'foxRecord', 'foxRecordValues', 'foxFieldInfo', 'foxUpdateFields', 'foxSetDeleted', 'foxOpenAsInvoice', 'foxRebuildIndexes',
-  'pmaStatus', 'pmaList', 'pmaFind', 'pmaGet', 'pmaPreview', 'pmaSavePdf', 'pmaPrint',
-  'invoiceList', 'knownBarcodes', 'invoiceGet', 'invoiceSave', 'invoiceDelete', 'invoicePreview', 'invoiceSavePdf', 'invoicePrint', 'openPath',
-  'packingList', 'packingGet', 'packingSave', 'packingDelete', 'packingPreview', 'packingSavePdf', 'packingPrint',
-  'recordList', 'recordGet', 'recordForMonth', 'recordSave', 'recordDelete', 'recordRowFor', 'recordPreview', 'recordSavePdf', 'recordPrint',
-  'stats', 'salesSeries', 'changes', 'backupNow', 'openGuide'
+  'pmaStatus', 'pmaList', 'pmaFind', 'pmaGet', 'pmaPreview', 'pmaSavePdf', 'pmaPrint', 'pmaSaveXlsx',
+  'invoiceList', 'knownBarcodes', 'invoiceGet', 'invoiceSave', 'invoiceDelete', 'invoicePreview', 'invoiceSavePdf', 'invoicePrint', 'invoiceSaveXlsx', 'openPath',
+  'packingList', 'packingGet', 'packingSave', 'packingDelete', 'packingPreview', 'packingSavePdf', 'packingPrint', 'packingSaveXlsx',
+  'recordList', 'recordGet', 'recordForMonth', 'recordSave', 'recordDelete', 'recordRowFor', 'recordPreview', 'recordSavePdf', 'recordPrint', 'recordSaveXlsx',
+  'stats', 'salesSeries', 'changes', 'backupNow', 'dbStatus', 'dbCheckFolder', 'dbSetFolder', 'dbOpenFolder', 'openGuide'
 ]
 
 /** Calls that work before login. */
@@ -112,7 +125,7 @@ export const PUBLIC_METHODS = new Set<keyof Api>(['appInfo', 'session', 'login']
  * Calls that need the admin password. Saving over an invoice or packing list that is already saved
  * also needs it (checked in the handler, since saving a new one does not).
  */
-export const ADMIN_METHODS = new Set<keyof Api>(['saveSettings', 'changeLogins', 'foxRebuildIndexes', 'backupNow', 'changes', 'makeAccessCode'])
+export const ADMIN_METHODS = new Set<keyof Api>(['saveSettings', 'changeLogins', 'foxRebuildIndexes', 'backupNow', 'changes', 'makeAccessCode', 'dbSetFolder'])
 /**
  * Calls that need edit access: the admin, or an access code opened for a set time. Saving over a saved
  * invoice, packing list or shipping record (or a FoxPro record) is checked in the handler too. FoxPro

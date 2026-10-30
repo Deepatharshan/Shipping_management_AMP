@@ -23,6 +23,11 @@ export interface Settings {
   defaults: CiDefaults
   /** Folder for one-click backups */
   backupPath: string
+  /**
+   * Folder of the app's own database (shipments.db: invoices, packing lists, shipping records, change
+   * log). Blank = the app data folder. Changed only through Settings → App database (it moves the file).
+   */
+  dataFolder: string
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -38,7 +43,8 @@ export const DEFAULT_SETTINGS: Settings = {
     email: ''
   },
   defaults: DEFAULT_CI,
-  backupPath: ''
+  backupPath: '',
+  dataFolder: ''
 }
 
 export interface AppInfo {
@@ -175,6 +181,31 @@ export interface SaveResult {
 export interface SalePoint {
   date: string
   amount: number
+}
+
+/** Where the app's database is, and what is in it. */
+export interface DbStatus {
+  file: string
+  folder: string
+  /** the app data folder (the default place) */
+  defaultFolder: string
+  isDefault: boolean
+  /** a network path (\\server\share): kept in the safer journal mode */
+  network: boolean
+  size: number
+  invoices: number
+  packingLists: number
+  records: number
+}
+
+/** What is in a folder the user picked for the database. */
+export interface DbFolderCheck {
+  folder: string
+  sameAsNow: boolean
+  /** a shipments.db is already there */
+  hasDb: boolean
+  invoices: number | null
+  network: boolean
 }
 
 export interface Stats {

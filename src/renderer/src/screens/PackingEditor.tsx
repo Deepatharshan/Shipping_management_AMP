@@ -221,6 +221,11 @@ export default function PackingEditor({ request, onHandled, go }: { request: Ope
       const p = await window.api.packingSavePdf(pl!)
       if (p) toast(`PDF saved: ${p}`)
     })
+  const saveXlsx = () =>
+    run('Saving the Excel file…', async () => {
+      const p = await window.api.packingSaveXlsx(pl!)
+      if (p) toast(`Excel file saved: ${p}`)
+    })
   const print = () => run('Opening for print…', () => window.api.packingPrint(pl!))
 
   if (!pl || !settings) return <div className="empty">Loading…</div>
@@ -617,6 +622,9 @@ export default function PackingEditor({ request, onHandled, go }: { request: Ope
         <button className="btn light" onClick={savePdf} disabled={!!busy}>
           <Icon name="download" /> Save PDF
         </button>
+        <button className="btn light" onClick={saveXlsx} disabled={!!busy} title="Save as an Excel workbook">
+          <Icon name="grid" /> Excel
+        </button>
         <button className="btn light" onClick={print} disabled={!!busy}>
           <Icon name="printer" /> Print
         </button>
@@ -637,6 +645,9 @@ export default function PackingEditor({ request, onHandled, go }: { request: Ope
             <>
               <button className="btn" onClick={savePdf}>
                 <Icon name="download" /> Save PDF
+              </button>
+              <button className="btn" onClick={saveXlsx}>
+                <Icon name="grid" /> Excel
               </button>
               <button className="btn dark" onClick={print}>
                 <Icon name="printer" /> Print

@@ -74,5 +74,8 @@
       "artifactName": "Shipping-Management-AMP-Setup-${version}.exe"
     },
     "npmRebuild": false
+  },
+  "dependencies": {
+    "exceljs": "^4.4.0"
   }
 }

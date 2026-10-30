@@ -171,6 +171,11 @@ export default function ShippingRecordScreen() {
       const p = await window.api.recordSavePdf(rec!)
       if (p) toast(`PDF saved: ${p}`)
     })
+  const saveXlsx = () =>
+    run('Saving the Excel file…', async () => {
+      const p = await window.api.recordSaveXlsx(rec!)
+      if (p) toast(`Excel file saved: ${p}`)
+    })
   const print = () => run('Opening for print…', () => window.api.recordPrint(rec!))
 
   const open = async (id: string) => {
@@ -333,6 +338,9 @@ export default function ShippingRecordScreen() {
         <button className="btn light" onClick={savePdf} disabled={!!busy || !rec.rows.length}>
           <Icon name="download" /> Save PDF
         </button>
+        <button className="btn light" onClick={saveXlsx} disabled={!!busy || !rec.rows.length} title="Save as an Excel workbook">
+          <Icon name="grid" /> Excel
+        </button>
         <button className="btn light" onClick={print} disabled={!!busy || !rec.rows.length}>
           <Icon name="printer" /> Print
         </button>
@@ -353,6 +361,9 @@ export default function ShippingRecordScreen() {
             <>
               <button className="btn" onClick={savePdf}>
                 <Icon name="download" /> Save PDF
+              </button>
+              <button className="btn" onClick={saveXlsx}>
+                <Icon name="grid" /> Excel
               </button>
               <button className="btn dark" onClick={print}>
                 <Icon name="printer" /> Print

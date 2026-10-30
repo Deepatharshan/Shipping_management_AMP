@@ -38,7 +38,7 @@ interface Marks {
 }
 
 /** The stored proforma with every field the layout needs (older saves may miss some). */
-function normalize(pf: PmaProforma) {
+export function normalizeProformaForPrint(pf: PmaProforma) {
   const raw = pf as unknown as Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
   const h = raw.header ?? {}
   const c = h.customer ?? {}
@@ -76,7 +76,7 @@ function normalize(pf: PmaProforma) {
     }
   }
 }
-type P = ReturnType<typeof normalize>
+type P = ReturnType<typeof normalizeProformaForPrint>
 
 function totals(lines: Line[]) {
   const by = new Map<Unit, number>()
@@ -279,7 +279,7 @@ function page2(company: CompanyDetails, bank: string, p: P): string {
 }
 
 export function proformaHtml(company: CompanyDetails, bank: string, pf: PmaProforma): string {
-  const p = normalize(pf)
+  const p = normalizeProformaForPrint(pf)
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(p.invoiceNo || 'Proforma Invoice')}</title><style>${CSS}</style></head>
 <body>${page1(company, p)}${page2(company, bank, p)}
 <script>

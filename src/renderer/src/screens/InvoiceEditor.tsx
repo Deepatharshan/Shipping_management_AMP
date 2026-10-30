@@ -247,6 +247,19 @@ export default function InvoiceEditor({ request, onHandled, go }: { request: Ope
     }
   }
 
+  const saveXlsx = async () => {
+    if (!ci) return
+    setBusy('Saving the Excel file…')
+    try {
+      const p = await window.api.invoiceSaveXlsx(ci)
+      if (p) toast(`Excel file saved: ${p}`)
+    } catch (e) {
+      toast(errorText(e), 'error')
+    } finally {
+      setBusy('')
+    }
+  }
+
   const print = async () => {
     if (!ci) return
     setBusy('Opening for print…')
@@ -786,6 +799,9 @@ export default function InvoiceEditor({ request, onHandled, go }: { request: Ope
         <button className="btn light" onClick={savePdf} disabled={!!busy}>
           <Icon name="download" /> Save PDF
         </button>
+        <button className="btn light" onClick={saveXlsx} disabled={!!busy} title="Save as an Excel workbook">
+          <Icon name="grid" /> Excel
+        </button>
         <button className="btn light" onClick={print} disabled={!!busy}>
           <Icon name="printer" /> Print
         </button>
@@ -806,6 +822,9 @@ export default function InvoiceEditor({ request, onHandled, go }: { request: Ope
             <>
               <button className="btn" onClick={savePdf}>
                 <Icon name="download" /> Save PDF
+              </button>
+              <button className="btn" onClick={saveXlsx}>
+                <Icon name="grid" /> Excel
               </button>
               <button className="btn dark" onClick={print}>
                 <Icon name="printer" /> Print
